@@ -1,0 +1,17 @@
+SETUP PROJECT
+
+1. Pastikan file .env.local ada di root project.
+2. Jalankan:
+   npm install
+   npm run dev
+
+Jika npm masih mencoba ke registry lain, jalankan:
+   npm config set registry https://registry.npmjs.org/
+
+Jika masih gagal, bersihkan cache:
+   npm cache clean --force
+   npm install
+
+Catatan:
+- package-lock.json sengaja dihapus agar dependency di-resolve dari registry npm publik.
+- Jangan commit key Supabase ke repo publik.

@@ -1,0 +1,10 @@
+1. Buka Supabase > SQL Editor
+2. Jalankan isi file supabase/002_vendor_payment_storage.sql
+3. Jalankan project:
+   npm install
+   npm run dev
+
+Setelah itu:
+- bukti transfer vendor akan diupload ke bucket Storage 'vendor-payment-proofs'
+- database hanya menyimpan URL publik dan path file
+- saat pembayaran vendor dihapus, file di Storage ikut dihapus
