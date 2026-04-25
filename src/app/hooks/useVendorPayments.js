@@ -1,3 +1,4 @@
+import { deleteVendorPaymentFromSupabase } from "../../shared/lib/supabasePersistence";
 import { useMemo, useState } from "react";
 import {
   PAYMENT_METHODS,
@@ -121,16 +122,25 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
   };
 
   const removeVendorPayment = async (itemOrId) => {
-    const id = typeof itemOrId === "string" ? itemOrId : itemOrId?.id;
-    const target = typeof itemOrId === "object" ? itemOrId : null;
-    if (!window.confirm("Hapus pembayaran vendor ini?")) return;
-    try {
-      if (target?.buktiPath) await deleteVendorPaymentProof(target.buktiPath);
-    } catch (error) {
-      showToast(error.message || "Bukti transfer gagal dihapus dari Storage.", "amber");
+  const id = typeof itemOrId === "string" ? itemOrId : itemOrId?.id;
+  const target = typeof itemOrId === "object" ? itemOrId : null;
+
+  if (!id) return;
+  if (!window.confirm("Hapus pembayaran vendor ini?")) return;
+
+  try {
+    if (target?.buktiPath) {
+      await deleteVendorPaymentProof(target.buktiPath);
     }
+
+    await deleteVendorPaymentFromSupabase(id);
+
     setVendorPayments((prev) => prev.filter((item) => item.id !== id));
-  };
+    showToast("Pembayaran vendor berhasil dihapus.", "emerald");
+  } catch (error) {
+    showToast(error.message || "Gagal menghapus pembayaran vendor.", "rose");
+  }
+};
 
   const selectedExpenseForForm = vendorPaymentForm.expenseId ? expenseLookup[String(vendorPaymentForm.expenseId)] : null;
   const proofStatusText = useMemo(() => {

@@ -1,3 +1,4 @@
+import { deleteExpenseFromSupabase } from "../../shared/lib/supabasePersistence";
 import { useMemo, useState } from "react";
 import {
   EXPENSE_CATEGORIES,
@@ -147,12 +148,21 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
     });
   };
 
-  const removeExpense = (item) => {
-    if (!window.confirm(`Hapus tagihan ${item.nama}? Pembayaran yang sudah terhubung akan diubah menjadi tidak tertaut.`)) return;
+  const removeExpense = async (item) => {
+  if (!window.confirm(`Hapus tagihan ${item.nama}? Pembayaran yang terkait juga akan dihapus.`)) return;
+
+  try {
+    await deleteExpenseFromSupabase(item.id);
+
     setExpenses((prev) => prev.filter((expense) => expense.id !== item.id));
-    setVendorPayments((prev) => prev.map((payment) => (payment.expenseId === item.id ? { ...payment, expenseId: "", vendorSnapshot: item.vendor || item.nama } : payment)));
+    setVendorPayments((prev) => prev.filter((payment) => payment.expenseId !== item.id));
+
     if (editingExpenseId === item.id) resetExpenseForm();
-  };
+    showToast("Tagihan vendor berhasil dihapus dari Supabase.", "emerald");
+  } catch (error) {
+    showToast(error.message || "Gagal menghapus tagihan vendor dari Supabase.", "rose");
+  }
+};
 
   const addOrUpdateIncome = () => {
     if (!incomeForm.nama.trim() || clampMin(incomeForm.nominal) <= 0) {

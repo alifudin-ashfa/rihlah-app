@@ -192,6 +192,37 @@ const upsertMany = async (table, rows) => {
   throwIfError(`Gagal menyimpan ${table}`, error);
 };
 
+export const deleteExpenseFromSupabase = async (id) => {
+  if (!isSupabaseConfigured || !supabase || !id) return;
+
+  // Hapus pembayaran vendor yang terkait dengan tagihan ini dulu
+  const { error: paymentError } = await supabase
+    .from("vendor_payments")
+    .delete()
+    .eq("expense_id", String(id));
+
+  throwIfError("Gagal menghapus pembayaran vendor terkait", paymentError);
+
+  // Hapus tagihan vendor
+  const { error: expenseError } = await supabase
+    .from("expenses")
+    .delete()
+    .eq("id", String(id));
+
+  throwIfError("Gagal menghapus tagihan vendor", expenseError);
+};
+
+export const deleteVendorPaymentFromSupabase = async (id) => {
+  if (!isSupabaseConfigured || !supabase || !id) return;
+
+  const { error } = await supabase
+    .from("vendor_payments")
+    .delete()
+    .eq("id", String(id));
+
+  throwIfError("Gagal menghapus pembayaran vendor", error);
+};
+
 export async function loadStateFromSupabase() {
   if (!isSupabaseConfigured || !supabase) return null;
 
