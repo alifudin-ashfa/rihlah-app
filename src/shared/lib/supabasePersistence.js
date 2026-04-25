@@ -186,9 +186,9 @@ const deleteAll = async (table) => {
   throwIfError(`Gagal mengosongkan ${table}`, error);
 };
 
-const insertMany = async (table, rows) => {
+const upsertMany = async (table, rows) => {
   if (!rows.length) return;
-  const { error } = await supabase.from(table).insert(rows);
+  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
   throwIfError(`Gagal menyimpan ${table}`, error);
 };
 
@@ -249,11 +249,11 @@ export async function saveStateToSupabase(state) {
     .upsert(mapConfigToDb(config), { onConflict: "id" });
   throwIfError("Gagal menyimpan settings_kegiatan", settingsError);
 
-  await deleteAll("participant_payments");
-  await deleteAll("vendor_payments");
-  await deleteAll("other_incomes");
-  await deleteAll("expenses");
-  await deleteAll("participants");
+  // await deleteAll("participant_payments");
+  // await deleteAll("vendor_payments");
+  // await deleteAll("other_incomes");
+  // await deleteAll("expenses");
+  // await deleteAll("participants");
 
   const participantRows = (state.participants || []).map((item) => mapParticipantToDb(item, config.iuranDefaultSantri));
   const participantPaymentRows = (state.participants || []).flatMap((participant) =>
@@ -263,9 +263,9 @@ export async function saveStateToSupabase(state) {
   const vendorPaymentRows = (state.vendorPayments || []).map(mapVendorPaymentToDb);
   const otherIncomeRows = (state.otherIncomes || []).map(mapOtherIncomeToDb);
 
-  await insertMany("participants", participantRows);
-  await insertMany("participant_payments", participantPaymentRows);
-  await insertMany("expenses", expenseRows);
-  await insertMany("vendor_payments", vendorPaymentRows);
-  await insertMany("other_incomes", otherIncomeRows);
+  await upsertMany("participants", participantRows);
+  await upsertMany("participant_payments", participantPaymentRows);
+  await upsertMany("expenses", expenseRows);
+  await upsertMany("vendor_payments", vendorPaymentRows);
+  await upsertMany("other_incomes", otherIncomeRows);
 }
