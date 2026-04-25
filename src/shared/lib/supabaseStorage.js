@@ -29,18 +29,34 @@ export async function uploadVendorPaymentProof({ paymentId, file }) {
     throw new Error(`Gagal upload bukti transfer ke Storage: ${uploadError.message}`);
   }
 
-  const { data } = supabase.storage.from(VENDOR_PAYMENT_BUCKET).getPublicUrl(path);
+  const signedUrl = await createVendorPaymentProofSignedUrl(path);
 
   return {
     path,
-    publicUrl: data?.publicUrl || "",
+    publicUrl: signedUrl,
     fileName: file.name || safeName,
   };
 }
 
+export async function createVendorPaymentProofSignedUrl(path) {
+  if (!isSupabaseConfigured || !supabase || !path) return "";
+
+  const { data, error } = await supabase.storage
+    .from(VENDOR_PAYMENT_BUCKET)
+    .createSignedUrl(path, 60 * 60 * 24);
+
+  if (error) {
+    throw new Error(`Gagal membuat link bukti transfer: ${error.message}`);
+  }
+
+  return data?.signedUrl || "";
+}
+
 export async function deleteVendorPaymentProof(path) {
   if (!isSupabaseConfigured || !supabase || !path) return;
+
   const { error } = await supabase.storage.from(VENDOR_PAYMENT_BUCKET).remove([path]);
+
   if (error) {
     throw new Error(`Gagal menghapus file bukti transfer dari Storage: ${error.message}`);
   }

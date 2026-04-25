@@ -9,7 +9,11 @@ import {
   normalizeVendorPayment,
   readFileAsDataUrl,
 } from "../../shared/lib/rihlahCore";
-import { deleteVendorPaymentProof, uploadVendorPaymentProof } from "../../shared/lib/supabaseStorage";
+import {
+  createVendorPaymentProofSignedUrl,
+  deleteVendorPaymentProof,
+  uploadVendorPaymentProof,
+} from "../../shared/lib/supabaseStorage";
 
 export function useVendorPayments({ setVendorPayments, expenseLookup, showToast, paymentProofInputRef }) {
   const [vendorPaymentForm, setVendorPaymentForm] = useState({
@@ -122,25 +126,16 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
   };
 
   const removeVendorPayment = async (itemOrId) => {
-  const id = typeof itemOrId === "string" ? itemOrId : itemOrId?.id;
-  const target = typeof itemOrId === "object" ? itemOrId : null;
-
-  if (!id) return;
-  if (!window.confirm("Hapus pembayaran vendor ini?")) return;
-
-  try {
-    if (target?.buktiPath) {
-      await deleteVendorPaymentProof(target.buktiPath);
+    const id = typeof itemOrId === "string" ? itemOrId : itemOrId?.id;
+    const target = typeof itemOrId === "object" ? itemOrId : null;
+    if (!window.confirm("Hapus pembayaran vendor ini?")) return;
+    try {
+      if (target?.buktiPath) await deleteVendorPaymentProof(target.buktiPath);
+    } catch (error) {
+      showToast(error.message || "Bukti transfer gagal dihapus dari Storage.", "amber");
     }
-
-    await deleteVendorPaymentFromSupabase(id);
-
     setVendorPayments((prev) => prev.filter((item) => item.id !== id));
-    showToast("Pembayaran vendor berhasil dihapus.", "emerald");
-  } catch (error) {
-    showToast(error.message || "Gagal menghapus pembayaran vendor.", "rose");
-  }
-};
+  };
 
   const selectedExpenseForForm = vendorPaymentForm.expenseId ? expenseLookup[String(vendorPaymentForm.expenseId)] : null;
   const proofStatusText = useMemo(() => {
@@ -150,17 +145,29 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
     return "";
   }, [isUploadingProof, vendorPaymentForm.buktiFile, vendorPaymentForm.buktiNama]);
 
+  const refreshVendorProofUrl = async (payment) => {
+  if (!payment?.buktiPath) return "";
+
+  try {
+    return await createVendorPaymentProofSignedUrl(payment.buktiPath);
+  } catch (error) {
+    showToast(error.message || "Gagal membuka bukti pembayaran.", "rose");
+    return "";
+  }
+  };
+
   return {
-    vendorPaymentForm,
-    setVendorPaymentForm,
-    showVendorPaymentAdvanced,
-    setShowVendorPaymentAdvanced,
-    resetVendorPaymentForm,
-    handleVendorProofUpload,
-    addVendorPayment,
-    removeVendorPayment,
-    selectedExpenseForForm,
-    isUploadingProof,
-    proofStatusText,
+  vendorPaymentForm,
+  setVendorPaymentForm,
+  showVendorPaymentAdvanced,
+  setShowVendorPaymentAdvanced,
+  resetVendorPaymentForm,
+  handleVendorProofUpload,
+  addVendorPayment,
+  removeVendorPayment,
+  refreshVendorProofUrl,
+  selectedExpenseForForm,
+  isUploadingProof,
+  proofStatusText,
   };
 }

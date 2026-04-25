@@ -131,6 +131,7 @@ export default function VendorPage({ app }) {
     handleVendorProofUpload,
     addVendorPayment,
     removeVendorPayment,
+    refreshVendorProofUrl,
     addOrUpdateParticipant,
     editParticipant,
     removeParticipant,
@@ -366,9 +367,33 @@ export default function VendorPage({ app }) {
                           <p>Status tagihan: <strong>{linkedExpense?.status || "Manual"}</strong></p>
                         </div>
                         {item.catatan ? <p className="text-sm text-slate-500">{item.catatan}</p> : null}
-                        {item.buktiDataUrl ? (
-                          <div className="mt-2 inline-flex overflow-hidden rounded-2xl border bg-slate-50 p-2">
-                            <img src={item.buktiDataUrl} alt={item.buktiNama || "Bukti transfer"} className="h-20 w-20 rounded-xl object-cover" />
+                        {item.buktiPath || item.buktiDataUrl ? (
+                          <div className="mt-2 flex flex-wrap items-center gap-3">
+                            {item.buktiDataUrl ? (
+                              <div className="inline-flex overflow-hidden rounded-2xl border bg-slate-50 p-2">
+                                <img
+                                  src={item.buktiDataUrl}
+                                  alt={item.buktiNama || "Bukti transfer"}
+                                  className="h-20 w-20 rounded-xl object-cover"
+                                />
+                              </div>
+                            ) : null}
+
+                            {item.buktiPath ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const signedUrl = await refreshVendorProofUrl(item);
+
+                                  if (signedUrl) {
+                                    window.open(signedUrl, "_blank", "noopener,noreferrer");
+                                  }
+                                }}
+                                className={smallButton}
+                              >
+                                Lihat bukti
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
