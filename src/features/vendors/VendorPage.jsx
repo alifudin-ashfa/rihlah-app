@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Trash2,
@@ -152,6 +152,51 @@ export default function VendorPage({ app }) {
     proofStatusText,
     selectedParticipantForPayment,
   } = app;
+
+  const [vendorProofPreviewUrls, setVendorProofPreviewUrls] = useState({});
+
+  const vendorProofPathSignature = filteredVendorPayments
+    .map((item) => `${item.id}:${item.buktiPath || ""}`)
+    .join("|");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadProofPreviews = async () => {
+      const paymentsWithProof = filteredVendorPayments.filter((item) => item.buktiPath);
+
+      if (paymentsWithProof.length === 0) {
+        if (!isCancelled) setVendorProofPreviewUrls({});
+        return;
+      }
+
+      const entries = await Promise.all(
+        paymentsWithProof.map(async (item) => {
+          const signedUrl = await refreshVendorProofUrl(item);
+          return [item.id, signedUrl];
+        })
+      );
+
+      if (isCancelled) return;
+
+      setVendorProofPreviewUrls((prev) => {
+        const next = { ...prev };
+
+        entries.forEach(([id, signedUrl]) => {
+          if (signedUrl) next[id] = signedUrl;
+        });
+
+        return next;
+      });
+    };
+
+    loadProofPreviews();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [vendorProofPathSignature]);
+
   const vendorGuide = (
     <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
       <p className="font-semibold">Cara pakai halaman vendor</p>
@@ -350,6 +395,7 @@ export default function VendorPage({ app }) {
               {filteredVendorPayments.map((item) => {
                 const linkedExpense = expenseLookup[String(item.expenseId)];
                 const vendorName = linkedExpense?.vendor || item.vendorSnapshot || "Belum ditautkan";
+                const proofPreviewUrl = vendorProofPreviewUrls[item.id] || item.buktiDataUrl;
                 return (
                   <div key={item.id} className="rounded-2xl border bg-white p-4">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -367,12 +413,12 @@ export default function VendorPage({ app }) {
                           <p>Status tagihan: <strong>{linkedExpense?.status || "Manual"}</strong></p>
                         </div>
                         {item.catatan ? <p className="text-sm text-slate-500">{item.catatan}</p> : null}
-                        {item.buktiPath || item.buktiDataUrl ? (
+                        {item.buktiPath || proofPreviewUrl ? (
                           <div className="mt-2 flex flex-wrap items-center gap-3">
-                            {item.buktiDataUrl ? (
+                            {proofPreviewUrl ? (
                               <div className="inline-flex overflow-hidden rounded-2xl border bg-slate-50 p-2">
                                 <img
-                                  src={item.buktiDataUrl}
+                                  src={proofPreviewUrl}
                                   alt={item.buktiNama || "Bukti transfer"}
                                   className="h-20 w-20 rounded-xl object-cover"
                                 />
