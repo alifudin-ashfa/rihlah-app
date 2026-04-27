@@ -4,6 +4,8 @@ import {
   buildCashbookSummary,
 } from "../../shared/lib/cashbookBuilder";
 import { formatRupiah } from "../../shared/lib/rihlahCore";
+import { exportCashbookExcel } from "../../shared/lib/exportExcel";
+import { exportCashbookPdf } from "../../shared/lib/exportPdf";
 
 function formatDate(value) {
   if (!value) return "-";
@@ -77,13 +79,31 @@ export default function BukuKasPage({ app }) {
   const summary = useMemo(() => buildCashbookSummary(rows), [rows]);
 
   const resetFilters = () => {
-    setFilters({
-      startDate: "",
-      endDate: "",
-      type: "all",
-      search: "",
-    });
-  };
+  setFilters({
+    startDate: "",
+    endDate: "",
+    type: "all",
+    search: "",
+  });
+};
+
+const handleExportExcel = () => {
+  exportCashbookExcel({
+    rows,
+    summary,
+    filters,
+    fileName: "buku-kas-rihlah.xlsx",
+  });
+};
+
+const handleExportPdf = () => {
+  exportCashbookPdf({
+    rows,
+    summary,
+    filters,
+    fileName: "buku-kas-rihlah.pdf",
+  });
+};
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -211,14 +231,32 @@ export default function BukuKasPage({ app }) {
           </label>
         </div>
 
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-          >
-            Reset filter
-          </button>
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <button
+                type="button"
+                onClick={resetFilters}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            >
+                Reset filter
+            </button>
+
+            <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={rows.length === 0}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Download Excel
+            </button>
+
+            <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={rows.length === 0}
+                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Download PDF
+            </button>
         </div>
       </div>
 
