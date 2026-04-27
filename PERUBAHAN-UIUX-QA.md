@@ -34,3 +34,52 @@ Berikut perubahan yang diterapkan berdasarkan audit:
 ## Catatan pengujian
 - Source JSX sudah dicek parse menggunakan Babel parser.
 - Build Vite tidak bisa dijalankan di environment ini karena `node_modules` dari ZIP asli tidak lengkap/terpotong saat ekstraksi dan dependency tidak bisa dipasang penuh tanpa akses jaringan. Jalankan `npm install` lalu `npm run build` di komputer lokal sebelum deploy.
+
+## v1.2-buku-kas-export
+
+Tanggal: 2026-04-27
+
+### Fitur baru
+
+- Menambahkan halaman **Buku Kas**.
+- Menambahkan menu **Buku Kas** di navigasi utama.
+- Menampilkan transaksi dari:
+  - pembayaran iuran santri,
+  - pemasukan lain,
+  - pembayaran vendor.
+- Menambahkan ringkasan:
+  - Total Masuk,
+  - Total Keluar,
+  - Saldo,
+  - Jumlah Transaksi.
+- Menambahkan filter:
+  - tanggal mulai,
+  - tanggal akhir,
+  - tipe transaksi,
+  - pencarian transaksi.
+- Menambahkan tampilan mobile untuk daftar transaksi Buku Kas.
+- Menambahkan export Buku Kas ke **Excel**.
+- Menambahkan export Buku Kas ke **PDF**.
+
+### Perbaikan
+
+- Memperbaiki sumber data Buku Kas agar membaca struktur data aplikasi yang benar.
+- Memperbaiki mode tampilan agar Pelihat terbaca sebagai **Pelihat / Read-only**.
+- Menyesuaikan transaksi Buku Kas agar membaca:
+  - `participants[].payments`,
+  - `otherIncomes`,
+  - `vendorPayments`.
+- Menambahkan saldo berjalan pada setiap transaksi.
+- Menonaktifkan tombol export jika belum ada transaksi.
+
+### Catatan teknis
+
+- Menambahkan file:
+  - `src/features/cashbook/BukuKasPage.jsx`
+  - `src/shared/lib/cashbookBuilder.js`
+  - `src/shared/lib/exportExcel.js`
+  - `src/shared/lib/exportPdf.js`
+- Menambahkan dependency:
+  - `xlsx`
+  - `jspdf`
+  - `jspdf-autotable`
