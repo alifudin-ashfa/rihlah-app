@@ -169,11 +169,12 @@ export default function SantriPage({ app }) {
       return;
     }
 
-    const maxSizeMb = 3;
-    const maxSizeBytes = maxSizeMb * 1024 * 1024;
+    const maxSizeBytes = 500 * 1024;
 
     if (file.size > maxSizeBytes) {
-      window.alert(`Ukuran bukti maksimal ${maxSizeMb} MB.`);
+      window.alert(
+        "Ukuran bukti maksimal 500 KB. Kompres gambar terlebih dahulu sebelum upload."
+      );
       event.target.value = "";
       return;
     }
@@ -295,7 +296,9 @@ export default function SantriPage({ app }) {
                     onClick={() => setShowParticipantAdvanced((prev) => !prev)}
                     className={smallButton}
                   >
-                    {showParticipantAdvanced ? "Sembunyikan detail" : "Tampilkan detail"}
+                    {showParticipantAdvanced
+                      ? "Sembunyikan detail"
+                      : "Tampilkan detail"}
                   </button>
                 </div>
 
@@ -513,7 +516,7 @@ export default function SantriPage({ app }) {
                       onChange={handleParticipantProofUpload}
                     />
                     <p className="text-xs text-slate-500">
-                      Opsional. Format JPG, PNG, WEBP, atau PDF. Maksimal 3 MB.
+                      Opsional. Format JPG, PNG, WEBP, atau PDF. Maksimal 500 KB.
                     </p>
 
                     {participantPaymentForm.buktiNama ? (
@@ -659,8 +662,7 @@ export default function SantriPage({ app }) {
                             Target: <strong>{formatRupiah(item.targetIuran)}</strong>
                           </p>
                           <p>
-                            Sudah bayar:{" "}
-                            <strong>{formatRupiah(item.totalPaid)}</strong>
+                            Sudah bayar: <strong>{formatRupiah(item.totalPaid)}</strong>
                           </p>
                           <p>
                             Sisa: <strong>{formatRupiah(item.remaining)}</strong>
@@ -715,9 +717,7 @@ export default function SantriPage({ app }) {
                                           className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
                                         >
                                           Lihat bukti{" "}
-                                          {payment.buktiNama
-                                            ? `(${payment.buktiNama})`
-                                            : ""}
+                                          {payment.buktiNama ? `(${payment.buktiNama})` : ""}
                                         </button>
                                       ) : (
                                         <p className="mt-2 text-xs text-slate-400">
