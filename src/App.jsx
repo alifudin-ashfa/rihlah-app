@@ -13,6 +13,7 @@ import KegiatanPage from "./features/kegiatan/KegiatanPage";
 import VendorPage from "./features/vendors/VendorPage";
 import SantriPage from "./features/participants/SantriPage";
 import LaporanPage from "./features/reports/LaporanPage";
+import BukuKasPage from "./features/cashbook/BukuKasPage";
 
 export default function App() {
   const app = useRihlahApp();
@@ -156,6 +157,7 @@ export default function App() {
           <Route path="/kegiatan" element={<KegiatanPage app={appWithAuth} />} />
           <Route path="/vendor" element={<VendorPage app={appWithAuth} />} />
           <Route path="/santri" element={<SantriPage app={appWithAuth} />} />
+          <Route path="/buku-kas" element={<BukuKasPage app={appWithAuth} />} />
           <Route path="/laporan" element={<LaporanPage app={appWithAuth} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

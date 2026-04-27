@@ -547,6 +547,7 @@ const navItems = [
   { key: "kegiatan", label: "Kegiatan", to: "/kegiatan" },
   { key: "vendor", label: "Vendor", to: "/vendor" },
   { key: "santri", label: "Santri", to: "/santri" },
+  { key: "buku-kas", label: "Buku Kas", to: "/buku-kas" },
   { key: "laporan", label: "Laporan", to: "/laporan" },
 ];
 
