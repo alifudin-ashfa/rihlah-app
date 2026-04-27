@@ -150,6 +150,8 @@ const normalizeParticipantPayment = (payment = {}) => ({
   metode: payment.metode || "Transfer",
   akunMasuk: payment.akunMasuk || "",
   catatan: payment.catatan || "",
+  buktiNama: payment.buktiNama || "",
+  buktiDataUrl: payment.buktiDataUrl || payment.buktiUrl || "",
 });
 
 const normalizeParticipant = (participant = {}, defaultTarget = 0) => {

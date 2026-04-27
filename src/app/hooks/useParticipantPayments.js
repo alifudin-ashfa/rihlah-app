@@ -9,7 +9,12 @@ import {
 } from "../../shared/lib/rihlahCore";
 import { deleteParticipantPaymentFromSupabase } from "../../shared/lib/supabasePersistence";
 
-export function useParticipantPayments({ participants, setParticipants, participantLookup, showToast }) {
+export function useParticipantPayments({
+  participants,
+  setParticipants,
+  participantLookup,
+  showToast,
+}) {
   const [participantPaymentForm, setParticipantPaymentForm] = useState({
     participantId: "",
     tanggal: getToday(),
@@ -17,9 +22,13 @@ export function useParticipantPayments({ participants, setParticipants, particip
     akunMasuk: "",
     nominal: "",
     catatan: "",
+    buktiNama: "",
+    buktiDataUrl: "",
   });
+
   const [showPaymentAdvanced, setShowPaymentAdvanced] = useState(false);
-  const [selectedPaymentParticipant, setSelectedPaymentParticipant] = useState("all");
+  const [selectedPaymentParticipant, setSelectedPaymentParticipant] =
+    useState("all");
 
   const participantPaymentHistory = useMemo(() => {
     const rows = participants.flatMap((item) =>
@@ -30,18 +39,26 @@ export function useParticipantPayments({ participants, setParticipants, particip
         participantClass: item.kelas,
       }))
     );
+
     rows.sort((a, b) => (b.tanggal || "").localeCompare(a.tanggal || ""));
-    return rows.filter((row) => selectedPaymentParticipant === "all" || String(row.participantId) === String(selectedPaymentParticipant));
+
+    return rows.filter(
+      (row) =>
+        selectedPaymentParticipant === "all" ||
+        String(row.participantId) === String(selectedPaymentParticipant)
+    );
   }, [participants, selectedPaymentParticipant]);
 
   const resetParticipantPaymentForm = () => {
     setParticipantPaymentForm({
       participantId: "",
       tanggal: getToday(),
-      metode: PAYMENT_METHODS[0],
-      akunMasuk: "",
       nominal: "",
+      metode: "Transfer",
+      akunMasuk: "",
       catatan: "",
+      buktiNama: "",
+      buktiDataUrl: "",
     });
   };
 
@@ -50,10 +67,12 @@ export function useParticipantPayments({ participants, setParticipants, particip
       showToast("Pilih santri yang membayar iuran.", "rose");
       return;
     }
+
     if (!participantPaymentForm.tanggal) {
       showToast("Tanggal pembayaran iuran wajib diisi.", "rose");
       return;
     }
+
     if (clampMin(participantPaymentForm.nominal) <= 0) {
       showToast("Nominal pembayaran iuran harus lebih dari 0.", "rose");
       return;
@@ -66,22 +85,42 @@ export function useParticipantPayments({ participants, setParticipants, particip
       metode: participantPaymentForm.metode,
       akunMasuk: participantPaymentForm.akunMasuk.trim(),
       catatan: participantPaymentForm.catatan.trim(),
+      buktiNama: participantPaymentForm.buktiNama || "",
+      buktiDataUrl: participantPaymentForm.buktiDataUrl || "",
     });
 
     setParticipants((prev) =>
       prev.map((item) =>
         String(item.id) === String(participantPaymentForm.participantId)
-          ? { ...item, payments: [paymentPayload, ...(Array.isArray(item.payments) ? item.payments : [])] }
+          ? {
+              ...item,
+              payments: [
+                paymentPayload,
+                ...(Array.isArray(item.payments) ? item.payments : []),
+              ],
+            }
           : item
       )
     );
 
-    setParticipantPaymentForm((prev) => ({ ...prev, nominal: "", catatan: "", akunMasuk: "" }));
+    setParticipantPaymentForm((prev) => ({
+      ...prev,
+      nominal: "",
+      catatan: "",
+      akunMasuk: "",
+      buktiNama: "",
+      buktiDataUrl: "",
+    }));
+
     showToast("Pembayaran iuran disimpan.", "emerald");
   };
 
   const focusParticipantPaymentForm = (participantId) => {
-    setParticipantPaymentForm((prev) => ({ ...prev, participantId: String(participantId) }));
+    setParticipantPaymentForm((prev) => ({
+      ...prev,
+      participantId: String(participantId),
+    }));
+
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -90,6 +129,7 @@ export function useParticipantPayments({ participants, setParticipants, particip
       title: "Hapus pembayaran iuran",
       message: "Transaksi pembayaran iuran ini akan dihapus dari histori santri.",
     });
+
     if (!confirmed) return;
 
     try {
@@ -98,7 +138,12 @@ export function useParticipantPayments({ participants, setParticipants, particip
       setParticipants((prev) =>
         prev.map((item) =>
           item.id === participantId
-            ? { ...item, payments: (item.payments || []).filter((payment) => payment.id !== paymentId) }
+            ? {
+                ...item,
+                payments: (item.payments || []).filter(
+                  (payment) => payment.id !== paymentId
+                ),
+              }
             : item
         )
       );

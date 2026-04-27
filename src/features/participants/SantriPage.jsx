@@ -25,6 +25,7 @@ import {
   buttonOutline,
   smallButton,
   formatRupiah,
+  readFileAsDataUrl,
   getExpenseTone,
   getParticipantTone,
   getExpenseIcon,
@@ -37,7 +38,6 @@ import {
   ProgressBar,
   tabClass,
 } from "../../shared/lib/rihlahCore";
-
 
 export default function SantriPage({ app }) {
   const {
@@ -150,6 +150,85 @@ export default function SantriPage({ app }) {
     selectedExpenseForForm,
     selectedParticipantForPayment,
   } = app;
+
+  const handleParticipantProofUpload = async (event) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      window.alert("Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.");
+      event.target.value = "";
+      return;
+    }
+
+    const maxSizeMb = 3;
+    const maxSizeBytes = maxSizeMb * 1024 * 1024;
+
+    if (file.size > maxSizeBytes) {
+      window.alert(`Ukuran bukti maksimal ${maxSizeMb} MB.`);
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+
+      setParticipantPaymentForm((prev) => ({
+        ...prev,
+        buktiNama: file.name,
+        buktiDataUrl: dataUrl,
+      }));
+    } catch {
+      window.alert("Gagal membaca file bukti pembayaran.");
+    }
+  };
+
+  const openPaymentProof = (payment) => {
+    const dataUrl = payment?.buktiDataUrl;
+
+    if (!dataUrl) {
+      window.alert("Bukti pembayaran tidak tersedia.");
+      return;
+    }
+
+    try {
+      if (!dataUrl.startsWith("data:")) {
+        window.open(dataUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      const [header, base64Data] = dataUrl.split(",");
+      const mimeMatch = header.match(/data:(.*?);base64/);
+      const mimeType = mimeMatch?.[1] || "application/octet-stream";
+
+      const binaryString = window.atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+
+      for (let index = 0; index < binaryString.length; index += 1) {
+        bytes[index] = binaryString.charCodeAt(index);
+      }
+
+      const blob = new Blob([bytes], { type: mimeType });
+      const blobUrl = URL.createObjectURL(blob);
+
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60_000);
+    } catch {
+      window.alert("Gagal membuka bukti pembayaran.");
+    }
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <Section id="santri" title="Rekap Santri dan Pembayaran Iuran">
@@ -160,223 +239,625 @@ export default function SantriPage({ app }) {
             <MiniStat label="Cicilan" value={`${jumlahCicilan} santri`} tone="amber" />
             <MiniStat label="Belum bayar" value={`${jumlahBelumBayar} santri`} tone="rose" />
             <MiniStat label="Iuran masuk" value={formatRupiah(totalIuranMasuk)} tone="emerald" />
-            <MiniStat label="Tunggakan iuran" value={formatRupiah(totalIuranOutstanding)} tone={totalIuranOutstanding > 0 ? "amber" : "emerald"} />
+            <MiniStat
+              label="Tunggakan iuran"
+              value={formatRupiah(totalIuranOutstanding)}
+              tone={totalIuranOutstanding > 0 ? "amber" : "emerald"}
+            />
           </div>
 
           <div className="rounded-2xl border bg-slate-50 p-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Cari dan Filter Santri</h3>
-                {/* <p className="text-sm text-slate-500">Gunakan filter status agar bendahara bisa cepat follow-up.</p> */}
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Cari dan Filter Santri
+                </h3>
               </div>
+
               <div className="relative w-full lg:w-80">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input className={`${inputClass} pl-9`} placeholder="Cari Santri" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} />
+                <input
+                  className={`${inputClass} pl-9`}
+                  placeholder="Cari Santri"
+                  value={participantSearch}
+                  onChange={(event) => setParticipantSearch(event.target.value)}
+                />
               </div>
             </div>
+
             <div className="mt-4 flex flex-wrap gap-2">
               {["Semua", "Belum Bayar", "Cicilan", "Lunas"].map((status) => (
-                <button key={status} onClick={() => setParticipantStatusFilter(status)} className={tabClass(participantStatusFilter === status)}>{status}</button>
+                <button
+                  key={status}
+                  onClick={() => setParticipantStatusFilter(status)}
+                  className={tabClass(participantStatusFilter === status)}
+                >
+                  {status}
+                </button>
               ))}
             </div>
           </div>
 
           {canEdit ? (
-          <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6">
-            <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Tambah / edit santri</h3>
-                  <p className="text-sm text-slate-500">Simpan hanya data yang benar-benar penting untuk operasional.</p>
-                </div>
-                <button onClick={() => setShowParticipantAdvanced((prev) => !prev)} className={smallButton}>{showParticipantAdvanced ? "Sembunyikan detail" : "Tampilkan detail"}</button>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">Nama santri</label>
-                  <input className={inputClass} placeholder="Nama santri" value={participantForm.nama} onChange={(event) => setParticipantForm((prev) => ({ ...prev, nama: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Kelas</label>
-                  <input className={inputClass} placeholder="Contoh: 8A" value={participantForm.kelas} onChange={(event) => setParticipantForm((prev) => ({ ...prev, kelas: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Kamar / kelompok</label>
-                  <input className={inputClass} placeholder="Contoh: Kamar 1" value={participantForm.kamar} onChange={(event) => setParticipantForm((prev) => ({ ...prev, kamar: event.target.value }))} />
-                </div>
-              </div>
-              {showParticipantAdvanced ? (
-                <div className="grid gap-3">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Target iuran</label>
-                    <input className={inputClass} type="number" inputMode="numeric" min="0" placeholder={String(config.iuranDefaultSantri)} aria-describedby="target-iuran-help" value={participantForm.targetIuran} onChange={(event) => setParticipantForm((prev) => ({ ...prev, targetIuran: event.target.value }))} />
+            <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6">
+              <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Tambah / edit santri
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Simpan hanya data yang benar-benar penting untuk operasional.
+                    </p>
                   </div>
-                  <p id="target-iuran-help" className="-mt-2 text-xs text-slate-500">Kosongkan untuk memakai nominal default. Masukkan angka tanpa titik, contoh: 500000.</p>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Catatan</label>
-                    <textarea className={textAreaClass} placeholder="Catatan khusus santri" value={participantForm.catatan} onChange={(event) => setParticipantForm((prev) => ({ ...prev, catatan: event.target.value }))} />
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {canEdit ? (
-                  <>
-                    <button onClick={addOrUpdateParticipant} className={buttonPrimary}><PlusCircle className="mr-2 h-4 w-4" /> {editingParticipantId ? "Simpan perubahan" : "Simpan santri"}</button>
-                    {editingParticipantId ? <button onClick={resetParticipantForm} className={buttonOutline}>Batal edit</button> : null}
-                  </>
-                ) : null}
-              </div>
-            </div>
 
-            <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">Catat pembayaran iuran</h3>
-                  <p className="text-sm text-slate-500">Pilih santri, isi nominal, lalu simpan. Detail tambahan bersifat opsional.</p>
+                  <button
+                    onClick={() => setShowParticipantAdvanced((prev) => !prev)}
+                    className={smallButton}
+                  >
+                    {showParticipantAdvanced ? "Sembunyikan detail" : "Tampilkan detail"}
+                  </button>
                 </div>
-                <button onClick={() => setShowPaymentAdvanced((prev) => !prev)} className={smallButton}>{showPaymentAdvanced ? "Sembunyikan detail" : "Tampilkan detail"}</button>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">Pilih santri</label>
-                  <select className={selectClass} value={participantPaymentForm.participantId} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, participantId: event.target.value }))}>
-                    <option value="">Pilih santri</option>
-                    {participantRows.map((item) => <option key={item.id} value={item.id}>{item.nama} - {item.kelas || "Tanpa kelas"}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Tanggal bayar</label>
-                  <input className={inputClass} type="date" value={participantPaymentForm.tanggal} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, tanggal: event.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Nominal pembayaran</label>
-                  <input className={inputClass} type="number" inputMode="numeric" min="0" placeholder="Contoh: 500000" aria-describedby="nominal-iuran-help" value={participantPaymentForm.nominal} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, nominal: event.target.value }))} />
-                  <p id="nominal-iuran-help" className="text-xs text-slate-500">Masukkan angka tanpa titik. Nominal wajib lebih dari 0.</p>
-                </div>
-              </div>
-              {showPaymentAdvanced ? (
+
                 <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Nama santri
+                    </label>
+                    <input
+                      className={inputClass}
+                      placeholder="Nama santri"
+                      value={participantForm.nama}
+                      onChange={(event) =>
+                        setParticipantForm((prev) => ({
+                          ...prev,
+                          nama: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Metode</label>
-                    <select className={selectClass} value={participantPaymentForm.metode} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, metode: event.target.value }))}>
-                      {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
+                    <label className="text-sm font-medium text-slate-700">
+                      Kelas
+                    </label>
+                    <input
+                      className={inputClass}
+                      placeholder="Contoh: 8A"
+                      value={participantForm.kelas}
+                      onChange={(event) =>
+                        setParticipantForm((prev) => ({
+                          ...prev,
+                          kelas: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Kamar / kelompok
+                    </label>
+                    <input
+                      className={inputClass}
+                      placeholder="Contoh: Kamar 1"
+                      value={participantForm.kamar}
+                      onChange={(event) =>
+                        setParticipantForm((prev) => ({
+                          ...prev,
+                          kamar: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {showParticipantAdvanced ? (
+                  <div className="grid gap-3">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Target iuran
+                      </label>
+                      <input
+                        className={inputClass}
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        placeholder={String(config.iuranDefaultSantri)}
+                        aria-describedby="target-iuran-help"
+                        value={participantForm.targetIuran}
+                        onChange={(event) =>
+                          setParticipantForm((prev) => ({
+                            ...prev,
+                            targetIuran: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <p id="target-iuran-help" className="-mt-2 text-xs text-slate-500">
+                      Kosongkan untuk memakai nominal default. Masukkan angka tanpa titik,
+                      contoh: 500000.
+                    </p>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Catatan
+                      </label>
+                      <textarea
+                        className={textAreaClass}
+                        placeholder="Catatan khusus santri"
+                        value={participantForm.catatan}
+                        onChange={(event) =>
+                          setParticipantForm((prev) => ({
+                            ...prev,
+                            catatan: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  {canEdit ? (
+                    <>
+                      <button onClick={addOrUpdateParticipant} className={buttonPrimary}>
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        {editingParticipantId ? "Simpan perubahan" : "Simpan santri"}
+                      </button>
+
+                      {editingParticipantId ? (
+                        <button onClick={resetParticipantForm} className={buttonOutline}>
+                          Batal edit
+                        </button>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      Catat pembayaran iuran
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Pilih santri, isi nominal, lalu simpan. Detail tambahan bersifat
+                      opsional.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setShowPaymentAdvanced((prev) => !prev)}
+                    className={smallButton}
+                  >
+                    {showPaymentAdvanced ? "Sembunyikan detail" : "Tampilkan detail"}
+                  </button>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Pilih santri
+                    </label>
+                    <select
+                      className={selectClass}
+                      value={participantPaymentForm.participantId}
+                      onChange={(event) =>
+                        setParticipantPaymentForm((prev) => ({
+                          ...prev,
+                          participantId: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Pilih santri</option>
+                      {participantRows.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.nama} - {item.kelas || "Tanpa kelas"}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Akun masuk</label>
-                    <input className={inputClass} placeholder={config.akunTujuan || "Kas / Rekening"} value={participantPaymentForm.akunMasuk} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, akunMasuk: event.target.value }))} />
+                    <label className="text-sm font-medium text-slate-700">
+                      Tanggal bayar
+                    </label>
+                    <input
+                      className={inputClass}
+                      type="date"
+                      value={participantPaymentForm.tanggal}
+                      onChange={(event) =>
+                        setParticipantPaymentForm((prev) => ({
+                          ...prev,
+                          tanggal: event.target.value,
+                        }))
+                      }
+                    />
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Nominal pembayaran
+                    </label>
+                    <input
+                      className={inputClass}
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      placeholder="Contoh: 500000"
+                      aria-describedby="nominal-iuran-help"
+                      value={participantPaymentForm.nominal}
+                      onChange={(event) =>
+                        setParticipantPaymentForm((prev) => ({
+                          ...prev,
+                          nominal: event.target.value,
+                        }))
+                      }
+                    />
+                    <p id="nominal-iuran-help" className="text-xs text-slate-500">
+                      Masukkan angka tanpa titik. Nominal wajib lebih dari 0.
+                    </p>
+                  </div>
+
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">Catatan transaksi</label>
-                    <textarea className={textAreaClass} placeholder="Contoh: Cicilan 1" value={participantPaymentForm.catatan} onChange={(event) => setParticipantPaymentForm((prev) => ({ ...prev, catatan: event.target.value }))} />
+                    <label className="text-sm font-medium text-slate-700">
+                      Bukti pembayaran
+                    </label>
+                    <input
+                      className={inputClass}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={handleParticipantProofUpload}
+                    />
+                    <p className="text-xs text-slate-500">
+                      Opsional. Format JPG, PNG, WEBP, atau PDF. Maksimal 3 MB.
+                    </p>
+
+                    {participantPaymentForm.buktiNama ? (
+                      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                        <span className="font-semibold">Bukti dipilih:</span>
+                        <span>{participantPaymentForm.buktiNama}</span>
+                        {participantPaymentForm.buktiDataUrl ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openPaymentProof({
+                                buktiDataUrl: participantPaymentForm.buktiDataUrl,
+                                buktiNama: participantPaymentForm.buktiNama,
+                              })
+                            }
+                            className="font-semibold underline"
+                          >
+                            Lihat
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-              ) : null}
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                {canEdit ? (
-                  <button onClick={addParticipantPayment} className={buttonPrimary}><ArrowDownCircle className="mr-2 h-4 w-4" /> Simpan pembayaran</button>
+
+                {showPaymentAdvanced ? (
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Metode
+                      </label>
+                      <select
+                        className={selectClass}
+                        value={participantPaymentForm.metode}
+                        onChange={(event) =>
+                          setParticipantPaymentForm((prev) => ({
+                            ...prev,
+                            metode: event.target.value,
+                          }))
+                        }
+                      >
+                        {PAYMENT_METHODS.map((method) => (
+                          <option key={method} value={method}>
+                            {method}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Akun masuk
+                      </label>
+                      <input
+                        className={inputClass}
+                        placeholder={config.akunTujuan || "Kas / Rekening"}
+                        value={participantPaymentForm.akunMasuk}
+                        onChange={(event) =>
+                          setParticipantPaymentForm((prev) => ({
+                            ...prev,
+                            akunMasuk: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Catatan transaksi
+                      </label>
+                      <textarea
+                        className={textAreaClass}
+                        placeholder="Contoh: Cicilan 1"
+                        value={participantPaymentForm.catatan}
+                        onChange={(event) =>
+                          setParticipantPaymentForm((prev) => ({
+                            ...prev,
+                            catatan: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
                 ) : null}
-                {selectedParticipantForPayment ? (
-                  <Pill tone={getParticipantTone(selectedParticipantForPayment.status)}>{selectedParticipantForPayment.nama}: sisa {formatRupiah(selectedParticipantForPayment.remaining)}</Pill>
-                ) : (
-                  <Pill>Pilih santri untuk melihat sisa tagihan</Pill>
-                )}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  {canEdit ? (
+                    <button onClick={addParticipantPayment} className={buttonPrimary}>
+                      <ArrowDownCircle className="mr-2 h-4 w-4" />
+                      Simpan pembayaran
+                    </button>
+                  ) : null}
+
+                  {selectedParticipantForPayment ? (
+                    <Pill tone={getParticipantTone(selectedParticipantForPayment.status)}>
+                      {selectedParticipantForPayment.nama}: sisa{" "}
+                      {formatRupiah(selectedParticipantForPayment.remaining)}
+                    </Pill>
+                  ) : (
+                    <Pill>Pilih santri untuk melihat sisa tagihan</Pill>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-
           ) : null}
 
           <div className="space-y-3">
-            {filteredParticipants.length === 0 ? <EmptyState text="Belum ada data santri yang cocok dengan pencarian." /> : filteredParticipants.map((item) => {
-              const isExpanded = Boolean(expandedParticipants[item.id]);
-              return (
-                <div key={item.id} className="rounded-2xl border bg-white p-4">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-slate-900">{item.nama}</p>
-                        <Pill>{item.kelas || "Tanpa kelas"}</Pill>
-                        <Pill>{item.kamar || "Tanpa kamar"}</Pill>
-                        <Pill tone={getParticipantTone(item.status)}>{item.status}</Pill>
-                        {item.overpaid > 0 ? <Pill tone="amber">Lebih bayar {formatRupiah(item.overpaid)}</Pill> : null}
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm text-slate-600">
-                          <span>Progress iuran</span>
-                          <strong>{formatRupiah(item.totalPaid)} / {formatRupiah(item.targetIuran)}</strong>
+            {filteredParticipants.length === 0 ? (
+              <EmptyState text="Belum ada data santri yang cocok dengan pencarian." />
+            ) : (
+              filteredParticipants.map((item) => {
+                const isExpanded = Boolean(expandedParticipants[item.id]);
+
+                return (
+                  <div key={item.id} className="rounded-2xl border bg-white p-4">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-900">{item.nama}</p>
+                          <Pill>{item.kelas || "Tanpa kelas"}</Pill>
+                          <Pill>{item.kamar || "Tanpa kamar"}</Pill>
+                          <Pill tone={getParticipantTone(item.status)}>{item.status}</Pill>
+                          {item.overpaid > 0 ? (
+                            <Pill tone="amber">
+                              Lebih bayar {formatRupiah(item.overpaid)}
+                            </Pill>
+                          ) : null}
                         </div>
-                        <ProgressBar value={item.totalPaid} max={item.targetIuran} />
-                      </div>
-                      <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 2xl:grid-cols-4">
-                        <p>Target: <strong>{formatRupiah(item.targetIuran)}</strong></p>
-                        <p>Sudah bayar: <strong>{formatRupiah(item.totalPaid)}</strong></p>
-                        <p>Sisa: <strong>{formatRupiah(item.remaining)}</strong></p>
-                        <p>Pembayaran terakhir: <strong>{item.lastPaymentDate || "-"}</strong></p>
-                      </div>
-                      {item.catatan ? <p className="text-sm text-slate-500">{item.catatan}</p> : null}
-                      {isExpanded ? (
-                        <div className="rounded-2xl border bg-slate-50 p-3">
-                          <p className="text-sm font-medium text-slate-700">Histori pembayaran</p>
-                          <div className="mt-3 space-y-2">
-                            {item.payments.length === 0 ? <p className="text-sm text-slate-500">Belum ada transaksi pembayaran.</p> : item.payments.map((payment) => (
-                              <div key={payment.id} className="flex flex-col gap-2 rounded-xl border bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
-                                <div>
-                                  <p className="text-sm font-medium text-slate-900">{formatRupiah(payment.nominal)}</p>
-                                  <p className="text-sm text-slate-500">{payment.tanggal || "-"} · {payment.metode || "-"} · {payment.akunMasuk || "Akun belum diisi"}</p>
-                                  {payment.catatan ? <p className="mt-1 text-xs text-slate-500">{payment.catatan}</p> : null}
-                                </div>
-                                {canEdit ? (
-                                  <button onClick={() => removeParticipantPayment(item.id, payment.id)} className={smallButton}><Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus</button>
-                                ) : null}
-                              </div>
-                            ))}
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm text-slate-600">
+                            <span>Progress iuran</span>
+                            <strong>
+                              {formatRupiah(item.totalPaid)} /{" "}
+                              {formatRupiah(item.targetIuran)}
+                            </strong>
                           </div>
+                          <ProgressBar value={item.totalPaid} max={item.targetIuran} />
                         </div>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {canEdit ? (
-                        <>
-                          <button onClick={() => focusParticipantPaymentForm(item.id)} className={smallButton}>Catat bayar</button>
-                          <button onClick={() => editParticipant(item)} className={smallButton}>Edit</button>
-                        </>
-                      ) : null}
-                      <button onClick={() => setExpandedParticipants((prev) => ({ ...prev, [item.id]: !prev[item.id] }))} className={smallButton}>{isExpanded ? "Sembunyikan histori" : "Lihat histori"}</button>
-                      {canEdit ? (
-                        <button onClick={() => removeParticipant(item.id)} className={smallButton}><Trash2 className="mr-1 h-3.5 w-3.5" /> Hapus</button>
-                      ) : null}
+
+                        <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 2xl:grid-cols-4">
+                          <p>
+                            Target: <strong>{formatRupiah(item.targetIuran)}</strong>
+                          </p>
+                          <p>
+                            Sudah bayar:{" "}
+                            <strong>{formatRupiah(item.totalPaid)}</strong>
+                          </p>
+                          <p>
+                            Sisa: <strong>{formatRupiah(item.remaining)}</strong>
+                          </p>
+                          <p>
+                            Pembayaran terakhir:{" "}
+                            <strong>{item.lastPaymentDate || "-"}</strong>
+                          </p>
+                        </div>
+
+                        {item.catatan ? (
+                          <p className="text-sm text-slate-500">{item.catatan}</p>
+                        ) : null}
+
+                        {isExpanded ? (
+                          <div className="rounded-2xl border bg-slate-50 p-3">
+                            <p className="text-sm font-medium text-slate-700">
+                              Histori pembayaran
+                            </p>
+
+                            <div className="mt-3 space-y-2">
+                              {item.payments.length === 0 ? (
+                                <p className="text-sm text-slate-500">
+                                  Belum ada transaksi pembayaran.
+                                </p>
+                              ) : (
+                                item.payments.map((payment) => (
+                                  <div
+                                    key={payment.id}
+                                    className="flex flex-col gap-2 rounded-xl border bg-white p-3 lg:flex-row lg:items-center lg:justify-between"
+                                  >
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-900">
+                                        {formatRupiah(payment.nominal)}
+                                      </p>
+                                      <p className="text-sm text-slate-500">
+                                        {payment.tanggal || "-"} ·{" "}
+                                        {payment.metode || "-"} ·{" "}
+                                        {payment.akunMasuk || "Akun belum diisi"}
+                                      </p>
+
+                                      {payment.catatan ? (
+                                        <p className="mt-1 text-xs text-slate-500">
+                                          {payment.catatan}
+                                        </p>
+                                      ) : null}
+
+                                      {payment.buktiDataUrl ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => openPaymentProof(payment)}
+                                          className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                        >
+                                          Lihat bukti{" "}
+                                          {payment.buktiNama
+                                            ? `(${payment.buktiNama})`
+                                            : ""}
+                                        </button>
+                                      ) : (
+                                        <p className="mt-2 text-xs text-slate-400">
+                                          Belum ada bukti pembayaran.
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {canEdit ? (
+                                      <button
+                                        onClick={() =>
+                                          removeParticipantPayment(item.id, payment.id)
+                                        }
+                                        className={smallButton}
+                                      >
+                                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                        Hapus
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {canEdit ? (
+                          <>
+                            <button
+                              onClick={() => focusParticipantPaymentForm(item.id)}
+                              className={smallButton}
+                            >
+                              Catat bayar
+                            </button>
+                            <button
+                              onClick={() => editParticipant(item)}
+                              className={smallButton}
+                            >
+                              Edit
+                            </button>
+                          </>
+                        ) : null}
+
+                        <button
+                          onClick={() =>
+                            setExpandedParticipants((prev) => ({
+                              ...prev,
+                              [item.id]: !prev[item.id],
+                            }))
+                          }
+                          className={smallButton}
+                        >
+                          {isExpanded ? "Sembunyikan histori" : "Lihat histori"}
+                        </button>
+
+                        {canEdit ? (
+                          <button
+                            onClick={() => removeParticipant(item.id)}
+                            className={smallButton}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Hapus
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </Section>
 
-      <Section title="Histori pembayaran iuran" subtitle="Tampilan audit cepat untuk seluruh transaksi pembayaran santri.">
+      <Section
+        title="Histori pembayaran iuran"
+        subtitle="Tampilan audit cepat untuk seluruh transaksi pembayaran santri."
+      >
         <div className="space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-700">Filter histori per santri</p>
-              <p className="text-sm text-slate-500">Gunakan saat ingin mengecek transaksi santri tertentu.</p>
+              <p className="text-sm font-semibold text-slate-700">
+                Filter histori per santri
+              </p>
+              <p className="text-sm text-slate-500">
+                Gunakan saat ingin mengecek transaksi santri tertentu.
+              </p>
             </div>
-            <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm" value={selectedPaymentParticipant} onChange={(event) => setSelectedPaymentParticipant(event.target.value)}>
+
+            <select
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+              value={selectedPaymentParticipant}
+              onChange={(event) => setSelectedPaymentParticipant(event.target.value)}
+            >
               <option value="all">Semua santri</option>
-              {participantRows.map((item) => <option key={item.id} value={item.id}>{item.nama}</option>)}
+              {participantRows.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nama}
+                </option>
+              ))}
             </select>
           </div>
-          {participantPaymentHistory.length === 0 ? <EmptyState text="Belum ada transaksi pembayaran iuran." /> : (
+
+          {participantPaymentHistory.length === 0 ? (
+            <EmptyState text="Belum ada transaksi pembayaran iuran." />
+          ) : (
             <div className="space-y-3">
               {participantPaymentHistory.map((payment) => (
                 <div key={payment.id} className="rounded-2xl border bg-white p-4">
                   <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <p className="font-semibold text-slate-900">{payment.participantName}</p>
-                      <p className="text-sm text-slate-500">{payment.participantClass || "Tanpa kelas"} · {payment.tanggal || "-"} · {payment.metode || "-"}</p>
+                      <p className="font-semibold text-slate-900">
+                        {payment.participantName}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {payment.participantClass || "Tanpa kelas"} ·{" "}
+                        {payment.tanggal || "-"} · {payment.metode || "-"}
+                      </p>
+
+                      {payment.buktiDataUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => openPaymentProof(payment)}
+                          className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                        >
+                          Lihat bukti{" "}
+                          {payment.buktiNama ? `(${payment.buktiNama})` : ""}
+                        </button>
+                      ) : (
+                        <p className="mt-2 text-xs text-slate-400">
+                          Belum ada bukti pembayaran.
+                        </p>
+                      )}
                     </div>
-                    <p className="text-lg font-bold text-slate-900">{formatRupiah(payment.nominal)}</p>
+
+                    <p className="text-lg font-bold text-slate-900">
+                      {formatRupiah(payment.nominal)}
+                    </p>
                   </div>
                 </div>
               ))}

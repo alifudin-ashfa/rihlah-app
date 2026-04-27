@@ -72,6 +72,8 @@ const mapParticipantPaymentFromDb = (row) =>
     metode: row.metode || "Transfer",
     akunMasuk: row.akun_masuk || "",
     catatan: row.catatan || "",
+    buktiNama: row.bukti_nama || "",
+    buktiDataUrl: row.bukti_data_url || "",
   });
 
 const mapParticipantPaymentToDb = (payment, participantId) => {
@@ -84,6 +86,8 @@ const mapParticipantPaymentToDb = (payment, participantId) => {
     metode: item.metode || "Transfer",
     akun_masuk: item.akunMasuk || "",
     catatan: item.catatan || "",
+    bukti_nama: item.buktiNama || "",
+    bukti_data_url: item.buktiDataUrl || "",
     updated_at: new Date().toISOString(),
   };
 };
