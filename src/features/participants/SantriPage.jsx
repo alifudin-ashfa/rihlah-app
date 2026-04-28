@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Trash2,
@@ -38,6 +38,9 @@ import {
   ProgressBar,
   tabClass,
 } from "../../shared/lib/rihlahCore";
+
+const hasPaymentProof = (payment) =>
+  Boolean(payment?.buktiDataUrl || payment?.buktiPath || payment?.buktiUrl);
 
 export default function SantriPage({ app }) {
   const {
@@ -150,6 +153,39 @@ export default function SantriPage({ app }) {
     selectedExpenseForForm,
     selectedParticipantForPayment,
   } = app;
+
+  const [paymentProofFilter, setPaymentProofFilter] = useState("all");
+
+  const paymentProofSummary = useMemo(() => {
+    const rows = Array.isArray(participantPaymentHistory)
+      ? participantPaymentHistory
+      : [];
+
+    const withProof = rows.filter(hasPaymentProof);
+    const withoutProof = rows.filter((payment) => !hasPaymentProof(payment));
+
+    return {
+      total: rows.length,
+      withProof: withProof.length,
+      withoutProof: withoutProof.length,
+    };
+  }, [participantPaymentHistory]);
+
+  const filteredParticipantPaymentHistory = useMemo(() => {
+    const rows = Array.isArray(participantPaymentHistory)
+      ? participantPaymentHistory
+      : [];
+
+    if (paymentProofFilter === "with-proof") {
+      return rows.filter(hasPaymentProof);
+    }
+
+    if (paymentProofFilter === "without-proof") {
+      return rows.filter((payment) => !hasPaymentProof(payment));
+    }
+
+    return rows;
+  }, [participantPaymentHistory, paymentProofFilter]);
 
   const handleParticipantProofUpload = async (event) => {
     const file = event.target.files?.[0];
@@ -398,7 +434,10 @@ export default function SantriPage({ app }) {
                       />
                     </div>
 
-                    <p id="target-iuran-help" className="-mt-2 text-xs text-slate-500">
+                    <p
+                      id="target-iuran-help"
+                      className="-mt-2 text-xs text-slate-500"
+                    >
                       Kosongkan untuk memakai nominal default. Masukkan angka tanpa titik,
                       contoh: 500000.
                     </p>
@@ -840,61 +879,71 @@ export default function SantriPage({ app }) {
                                     Belum ada transaksi pembayaran.
                                   </p>
                                 ) : (
-                                  item.payments.map((payment) => (
-                                    <div
-                                      key={payment.id}
-                                      className="flex flex-col gap-3 rounded-xl border bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between"
-                                    >
-                                      <div>
-                                        <p className="text-sm font-semibold text-slate-900">
-                                          {formatRupiah(payment.nominal)}
-                                        </p>
-                                        <p className="text-sm text-slate-500">
-                                          {payment.tanggal || "-"} ·{" "}
-                                          {payment.metode || "-"} ·{" "}
-                                          {payment.akunMasuk || "Akun belum diisi"}
-                                        </p>
+                                  item.payments.map((payment) => {
+                                    const proofExists = hasPaymentProof(payment);
 
-                                        {payment.catatan ? (
-                                          <p className="mt-1 text-xs text-slate-500">
-                                            {payment.catatan}
+                                    return (
+                                      <div
+                                        key={payment.id}
+                                        className="flex flex-col gap-3 rounded-xl border bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between"
+                                      >
+                                        <div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <p className="text-sm font-semibold text-slate-900">
+                                              {formatRupiah(payment.nominal)}
+                                            </p>
+                                            <Pill tone={proofExists ? "emerald" : "rose"}>
+                                              {proofExists ? "Dengan bukti" : "Tanpa bukti"}
+                                            </Pill>
+                                          </div>
+
+                                          <p className="mt-1 text-sm text-slate-500">
+                                            {payment.tanggal || "-"} ·{" "}
+                                            {payment.metode || "-"} ·{" "}
+                                            {payment.akunMasuk || "Akun belum diisi"}
                                           </p>
-                                        ) : null}
 
-                                        {payment.buktiDataUrl ? (
+                                          {payment.catatan ? (
+                                            <p className="mt-1 text-xs text-slate-500">
+                                              {payment.catatan}
+                                            </p>
+                                          ) : null}
+
+                                          {proofExists ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => openPaymentProof(payment)}
+                                              className="mt-2 inline-flex rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                            >
+                                              Lihat bukti{" "}
+                                              {payment.buktiNama
+                                                ? `(${payment.buktiNama})`
+                                                : ""}
+                                            </button>
+                                          ) : (
+                                            <p className="mt-2 text-xs text-slate-400">
+                                              Belum ada bukti pembayaran.
+                                            </p>
+                                          )}
+                                        </div>
+
+                                        {canEdit ? (
                                           <button
-                                            type="button"
-                                            onClick={() => openPaymentProof(payment)}
-                                            className="mt-2 inline-flex rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                            onClick={() =>
+                                              removeParticipantPayment(
+                                                item.id,
+                                                payment.id
+                                              )
+                                            }
+                                            className={smallButton}
                                           >
-                                            Lihat bukti{" "}
-                                            {payment.buktiNama
-                                              ? `(${payment.buktiNama})`
-                                              : ""}
+                                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                            Hapus
                                           </button>
-                                        ) : (
-                                          <p className="mt-2 text-xs text-slate-400">
-                                            Belum ada bukti pembayaran.
-                                          </p>
-                                        )}
+                                        ) : null}
                                       </div>
-
-                                      {canEdit ? (
-                                        <button
-                                          onClick={() =>
-                                            removeParticipantPayment(
-                                              item.id,
-                                              payment.id
-                                            )
-                                          }
-                                          className={smallButton}
-                                        >
-                                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                          Hapus
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  ))
+                                    );
+                                  })
                                 )}
                               </div>
                             </div>
@@ -939,68 +988,135 @@ export default function SantriPage({ app }) {
         subtitle="Tampilan audit cepat untuk seluruh transaksi pembayaran santri."
       >
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">
-                Filter histori per santri
-              </p>
-              <p className="text-sm text-slate-500">
-                Gunakan saat ingin mengecek transaksi santri tertentu.
-              </p>
-            </div>
-
-            <select
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={selectedPaymentParticipant}
-              onChange={(event) => setSelectedPaymentParticipant(event.target.value)}
-            >
-              <option value="all">Semua santri</option>
-              {participantRows.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.nama}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <MiniStat
+              label="Total transaksi histori"
+              value={`${paymentProofSummary.total} transaksi`}
+              tone="sky"
+            />
+            <MiniStat
+              label="Dengan bukti"
+              value={`${paymentProofSummary.withProof} transaksi`}
+              tone="emerald"
+            />
+            <MiniStat
+              label="Tanpa bukti"
+              value={`${paymentProofSummary.withoutProof} transaksi`}
+              tone={paymentProofSummary.withoutProof > 0 ? "rose" : "slate"}
+            />
           </div>
 
-          {participantPaymentHistory.length === 0 ? (
-            <EmptyState text="Belum ada transaksi pembayaran iuran." />
+          <div className="rounded-2xl border bg-slate-50 p-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Filter histori pembayaran
+                </p>
+                <p className="text-sm text-slate-500">
+                  Gunakan filter ini untuk audit transaksi yang sudah atau belum
+                  memiliki bukti pembayaran.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
+                <select
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  value={selectedPaymentParticipant}
+                  onChange={(event) =>
+                    setSelectedPaymentParticipant(event.target.value)
+                  }
+                >
+                  <option value="all">Semua santri</option>
+                  {participantRows.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.nama}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "all", label: "Semua bukti" },
+                    { value: "with-proof", label: "Dengan bukti" },
+                    { value: "without-proof", label: "Tanpa bukti" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setPaymentProofFilter(filter.value)}
+                      className={tabClass(paymentProofFilter === filter.value)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {filteredParticipantPaymentHistory.length === 0 ? (
+            <EmptyState
+              text={
+                paymentProofFilter === "without-proof"
+                  ? "Tidak ada transaksi iuran tanpa bukti pada filter ini."
+                  : paymentProofFilter === "with-proof"
+                    ? "Tidak ada transaksi iuran dengan bukti pada filter ini."
+                    : "Belum ada transaksi pembayaran iuran."
+              }
+            />
           ) : (
             <div className="space-y-3">
-              {participantPaymentHistory.map((payment) => (
-                <div key={payment.id} className="rounded-2xl border bg-white p-4">
-                  <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {payment.participantName}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        {payment.participantClass || "Tanpa kelas"} ·{" "}
-                        {payment.tanggal || "-"} · {payment.metode || "-"}
-                      </p>
+              {filteredParticipantPaymentHistory.map((payment) => {
+                const proofExists = hasPaymentProof(payment);
 
-                      {payment.buktiDataUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => openPaymentProof(payment)}
-                          className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
-                        >
-                          Lihat bukti{" "}
-                          {payment.buktiNama ? `(${payment.buktiNama})` : ""}
-                        </button>
-                      ) : (
-                        <p className="mt-2 text-xs text-slate-400">
-                          Belum ada bukti pembayaran.
+                return (
+                  <div key={payment.id} className="rounded-2xl border bg-white p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-slate-900">
+                            {payment.participantName}
+                          </p>
+
+                          <Pill tone={proofExists ? "emerald" : "rose"}>
+                            {proofExists ? "Dengan bukti" : "Tanpa bukti"}
+                          </Pill>
+                        </div>
+
+                        <p className="mt-1 text-sm text-slate-500">
+                          {payment.participantClass || "Tanpa kelas"} ·{" "}
+                          {payment.tanggal || "-"} · {payment.metode || "-"}
                         </p>
-                      )}
-                    </div>
 
-                    <p className="text-lg font-bold text-slate-900">
-                      {formatRupiah(payment.nominal)}
-                    </p>
+                        {payment.catatan ? (
+                          <p className="mt-1 text-xs text-slate-500">
+                            {payment.catatan}
+                          </p>
+                        ) : null}
+
+                        {proofExists ? (
+                          <button
+                            type="button"
+                            onClick={() => openPaymentProof(payment)}
+                            className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                          >
+                            Lihat bukti{" "}
+                            {payment.buktiNama ? `(${payment.buktiNama})` : ""}
+                          </button>
+                        ) : (
+                          <p className="mt-2 text-xs text-slate-400">
+                            Belum ada bukti pembayaran.
+                          </p>
+                        )}
+                      </div>
+
+                      <p className="text-lg font-bold text-slate-900">
+                        {formatRupiah(payment.nominal)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
