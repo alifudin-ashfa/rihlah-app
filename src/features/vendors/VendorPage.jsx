@@ -1,21 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { NavLink } from "react-router-dom";
-import {
-  Trash2,
-  PlusCircle,
-  Wallet,
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Search,
-  Download,
-  RotateCcw,
-  AlertTriangle,
-  Users,
-  Landmark,
-} from "lucide-react";
+import { Trash2, ArrowUpCircle } from "lucide-react";
 import {
   EXPENSE_CATEGORIES,
-  INCOME_SOURCES,
   PAYMENT_METHODS,
   VENDOR_PAYMENT_TYPES,
   inputClass,
@@ -26,132 +12,58 @@ import {
   smallButton,
   formatRupiah,
   getExpenseTone,
-  getParticipantTone,
   getExpenseIcon,
   Section,
-  StatCard,
   Pill,
   MiniStat,
   EmptyState,
   InlineBanner,
-  ProgressBar,
   tabClass,
 } from "../../shared/lib/rihlahCore";
 
-import { FileImage, Upload } from "lucide-react";
-
 export default function VendorPage({ app }) {
   const {
-    config,
     canEdit,
     expenseForm,
     setExpenseForm,
     editingExpenseId,
-    incomeForm,
-    setIncomeForm,
-    editingIncomeId,
     vendorPaymentForm,
     setVendorPaymentForm,
-    participantForm,
-    setParticipantForm,
-    editingParticipantId,
-    participantPaymentForm,
-    setParticipantPaymentForm,
-    participantSearch,
-    setParticipantSearch,
-    participantStatusFilter,
-    setParticipantStatusFilter,
     vendorStatusFilter,
     setVendorStatusFilter,
     vendorView,
     setVendorView,
-    laporanView,
-    setLaporanView,
-    expandedParticipants,
-    setExpandedParticipants,
-    homeUtilitiesOpen,
-    setHomeUtilitiesOpen,
     showVendorPaymentAdvanced,
     setShowVendorPaymentAdvanced,
-    showParticipantAdvanced,
-    setShowParticipantAdvanced,
-    showIncomeAdvanced,
-    setShowIncomeAdvanced,
     showExpenseAdvanced,
     setShowExpenseAdvanced,
-    showPaymentAdvanced,
-    setShowPaymentAdvanced,
     selectedVendorFilter,
     setSelectedVendorFilter,
-    selectedPaymentParticipant,
-    setSelectedPaymentParticipant,
-    importInputRef,
     paymentProofInputRef,
-    participantRows,
     vendorPaymentRows,
     expenseRows,
     expenseLookup,
-    filteredParticipants,
     filteredExpenseRows,
     filteredVendorPayments,
-    participantPaymentHistory,
     vendorFilterOptions,
-    jumlahSantri,
-    jumlahPembimbing,
-    jumlahPeserta,
-    totalIuranTarget,
-    totalIuranMasuk,
-    totalIuranOutstanding,
-    totalOtherIncome,
-    totalPemasukan,
     totalTagihan,
     totalVendorPaid,
     totalVendorAdmin,
-    totalArusKeluarVendor,
     totalLinkedVendorPaid,
     totalVendorOutstanding,
     totalVendorOverpaid,
     totalVendorUnlinked,
-    saldoKasSaatIni,
-    proyeksiSaldoAkhir,
-    iuranMinimalPerSantri,
-    kekuranganDana,
-    kekuranganPerSantri,
-    jumlahLunas,
-    jumlahCicilan,
-    jumlahBelumBayar,
-    warnings,
-    financeHealth,
-    handleConfigChange,
     addOrUpdateExpense,
     editExpense,
     removeExpense,
-    addOrUpdateIncome,
-    editIncome,
-    removeIncome,
     handleVendorProofUpload,
     addVendorPayment,
     removeVendorPayment,
     refreshVendorProofUrl,
-    addOrUpdateParticipant,
-    editParticipant,
-    removeParticipant,
-    addParticipantPayment,
-    focusParticipantPaymentForm,
-    removeParticipantPayment,
-    applyDefaultTargetToAll,
-    exportBackup,
-    importBackup,
-    exportCsvReport,
-    loadSampleData,
-    resetAllData,
     resetExpenseForm,
-    resetIncomeForm,
     resetVendorPaymentForm,
     selectedExpenseForForm,
-    isUploadingProof,
     proofStatusText,
-    selectedParticipantForPayment,
   } = app;
 
   const [vendorProofPreviewUrls, setVendorProofPreviewUrls] = useState({});
@@ -203,7 +115,7 @@ export default function VendorPage({ app }) {
     return () => {
       isCancelled = true;
     };
-  }, [vendorProofPathSignature]);
+  }, [vendorProofPathSignature, vendorPaymentRows, refreshVendorProofUrl]);
 
   const openDataOrUrl = (url) => {
     if (!url) {
@@ -305,7 +217,9 @@ export default function VendorPage({ app }) {
     >
       <div
         className={
-          canEdit ? "grid gap-6 2xl:grid-cols-[0.88fr_1.12fr]" : "grid gap-6"
+          canEdit
+            ? "grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]"
+            : "grid gap-6"
         }
       >
         {canEdit ? (
@@ -451,7 +365,7 @@ export default function VendorPage({ app }) {
           </div>
         ) : null}
 
-        <div className="space-y-4">
+        <div className="min-w-0 w-full space-y-4">
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MiniStat
@@ -476,346 +390,76 @@ export default function VendorPage({ app }) {
               />
             </div>
 
-            <div className="flex flex-wrap gap-2 xl:justify-start">
-              {["Semua", "Belum Dibayar", "DP / Cicilan", "Lunas", "Lebih Bayar"].map(
-                (status) => (
-                  <button
-                    key={status}
-                    onClick={() => setVendorStatusFilter(status)}
-                    className={tabClass(vendorStatusFilter === status)}
-                  >
-                    {status}
-                  </button>
-                )
-              )}
+            <div className="flex flex-wrap gap-2">
+              {[
+                "Semua",
+                "Belum Dibayar",
+                "DP / Cicilan",
+                "Lunas",
+                "Lebih Bayar",
+              ].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setVendorStatusFilter(status)}
+                  className={tabClass(vendorStatusFilter === status)}
+                >
+                  {status}
+                </button>
+              ))}
             </div>
           </div>
 
           {filteredExpenseRows.length === 0 ? (
             <EmptyState text="Belum ada data tagihan vendor pada filter ini." />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredExpenseRows.map((item) => {
                 const isExpanded = Boolean(expandedVendors[item.id]);
                 const payments = getPaymentsForExpense(item.id);
                 const totalPaid = getPaymentTotalForExpense(item.id);
                 const totalAdmin = getAdminTotalForExpense(item.id);
-                const remaining = Math.max(Number(item.nominal || 0) - totalPaid, 0);
-                const overpaid = Math.max(totalPaid - Number(item.nominal || 0), 0);
+                const remaining = Math.max(
+                  Number(item.nominal || 0) - totalPaid,
+                  0
+                );
+                const overpaid = Math.max(
+                  totalPaid - Number(item.nominal || 0),
+                  0
+                );
 
                 return (
-                  <div key={item.id} className="rounded-2xl border bg-white p-4">
+                  <div
+                    key={item.id}
+                    className="w-full rounded-3xl border bg-white p-5 shadow-sm"
+                  >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                          <span className="w-fit rounded-2xl bg-slate-100 p-3 text-slate-700">
                             {getExpenseIcon(item.kategori)}
                           </span>
 
-                          <div>
-                            <p className="font-semibold text-slate-900">
-                              {item.nama}
-                            </p>
-                            <p className="text-sm text-slate-500">
-                              {item.vendor}
-                            </p>
-                          </div>
-
-                          <Pill tone={getExpenseTone(item.status)}>
-                            {item.status}
-                          </Pill>
-
-                          {item.isOverdue ? (
-                            <Pill tone="rose">Lewat jatuh tempo</Pill>
-                          ) : null}
-                        </div>
-
-                        <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
-                          <p>
-                            Total: <strong>{formatRupiah(item.nominal)}</strong>
-                          </p>
-                          <p>
-                            Sudah dibayar:{" "}
-                            <strong>{formatRupiah(item.paid)}</strong>
-                          </p>
-                          <p>
-                            Sisa: <strong>{formatRupiah(item.remaining)}</strong>
-                          </p>
-                          <p>
-                            Jatuh tempo:{" "}
-                            <strong>{item.jatuhTempo || "-"}</strong>
-                          </p>
-                        </div>
-
-                        {item.catatan ? (
-                          <p className="text-sm text-slate-500">
-                            {item.catatan}
-                          </p>
-                        ) : null}
-
-                        {isExpanded ? (
-                          <div className="rounded-2xl border bg-slate-50 p-4">
-                            <div className="grid gap-4 lg:grid-cols-3">
-                              <div className="rounded-2xl border bg-white p-4">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Detail Tagihan
-                                </p>
-
-                                <div className="mt-3 space-y-2 text-sm text-slate-600">
-                                  <p>
-                                    Nama tagihan:{" "}
-                                    <strong className="text-slate-900">
-                                      {item.nama}
-                                    </strong>
-                                  </p>
-                                  <p>
-                                    Vendor:{" "}
-                                    <strong className="text-slate-900">
-                                      {item.vendor || "-"}
-                                    </strong>
-                                  </p>
-                                  <p>
-                                    Kategori:{" "}
-                                    <strong className="text-slate-900">
-                                      {item.kategori || "-"}
-                                    </strong>
-                                  </p>
-                                  <p>
-                                    Jatuh tempo:{" "}
-                                    <strong className="text-slate-900">
-                                      {item.jatuhTempo || "-"}
-                                    </strong>
-                                  </p>
-                                  <p>
-                                    Status:{" "}
-                                    <strong className="text-slate-900">
-                                      {item.status}
-                                    </strong>
-                                  </p>
-
-                                  {item.catatan ? (
-                                    <p className="rounded-xl bg-slate-50 p-3 text-slate-600">
-                                      {item.catatan}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border bg-white p-4">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Ringkasan Pembayaran
-                                </p>
-
-                                <div className="mt-3 space-y-3">
-                                  <div className="rounded-xl bg-slate-50 p-3">
-                                    <p className="text-sm text-slate-500">
-                                      Total tagihan
-                                    </p>
-                                    <p className="font-bold text-slate-900">
-                                      {formatRupiah(item.nominal)}
-                                    </p>
-                                  </div>
-
-                                  <div className="rounded-xl bg-emerald-50 p-3">
-                                    <p className="text-sm text-emerald-700">
-                                      Sudah dibayar
-                                    </p>
-                                    <p className="font-bold text-emerald-900">
-                                      {formatRupiah(totalPaid)}
-                                    </p>
-                                  </div>
-
-                                  <div className="rounded-xl bg-rose-50 p-3">
-                                    <p className="text-sm text-rose-700">
-                                      Sisa tagihan
-                                    </p>
-                                    <p className="font-bold text-rose-900">
-                                      {formatRupiah(remaining)}
-                                    </p>
-                                  </div>
-
-                                  {overpaid > 0 ? (
-                                    <div className="rounded-xl bg-amber-50 p-3">
-                                      <p className="text-sm text-amber-700">
-                                        Lebih bayar
-                                      </p>
-                                      <p className="font-bold text-amber-900">
-                                        {formatRupiah(overpaid)}
-                                      </p>
-                                    </div>
-                                  ) : null}
-
-                                  <div className="rounded-xl bg-slate-50 p-3">
-                                    <p className="text-sm text-slate-500">
-                                      Total biaya admin
-                                    </p>
-                                    <p className="font-bold text-slate-900">
-                                      {formatRupiah(totalAdmin)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl border bg-white p-4">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  Aksi Cepat
-                                </p>
-
-                                <div className="mt-3 flex flex-col gap-2">
-                                  {canEdit ? (
-                                    <>
-                                      <button
-                                        onClick={() => {
-                                          setVendorView("pembayaran");
-                                          setVendorPaymentForm((prev) => ({
-                                            ...prev,
-                                            expenseId: item.id,
-                                            vendorManual: item.vendor || item.nama,
-                                          }));
-                                        }}
-                                        className={buttonPrimary}
-                                      >
-                                        Catat pembayaran
-                                      </button>
-
-                                      <button
-                                        onClick={() => editExpense(item)}
-                                        className={buttonOutline}
-                                      >
-                                        Edit tagihan
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
-                                      Mode pelihat hanya dapat melihat detail tagihan.
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-bold text-slate-900">
+                                {item.nama}
+                              </h3>
+                              <Pill tone={getExpenseTone(item.status)}>
+                                {item.status}
+                              </Pill>
+                              {item.isOverdue ? (
+                                <Pill tone="rose">Lewat jatuh tempo</Pill>
+                              ) : null}
                             </div>
 
-                            <div className="mt-4 rounded-2xl border bg-white p-4">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-900">
-                                    Riwayat Pembayaran Vendor
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    Menampilkan semua pembayaran yang tertaut dengan
-                                    tagihan ini.
-                                  </p>
-                                </div>
-
-                                <Pill tone={getExpenseTone(item.status)}>
-                                  {item.status}
-                                </Pill>
-                              </div>
-
-                              <div className="mt-4 space-y-2">
-                                {payments.length === 0 ? (
-                                  <p className="rounded-xl border border-dashed bg-slate-50 p-4 text-sm text-slate-500">
-                                    Belum ada pembayaran untuk tagihan ini.
-                                  </p>
-                                ) : (
-                                  payments.map((payment) => {
-                                    const proofPreviewUrl =
-                                      vendorProofPreviewUrls[payment.id] ||
-                                      payment.buktiDataUrl;
-
-                                    return (
-                                      <div
-                                        key={payment.id}
-                                        className="flex flex-col gap-3 rounded-xl border bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between"
-                                      >
-                                        <div className="space-y-2">
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <p className="text-sm font-semibold text-slate-900">
-                                              {formatRupiah(payment.nominal)}
-                                            </p>
-                                            <Pill>{payment.jenis}</Pill>
-                                          </div>
-
-                                          <p className="text-sm text-slate-500">
-                                            {payment.tanggal || "-"} ·{" "}
-                                            {payment.metode || "-"} ·{" "}
-                                            {payment.akunTujuan || "Akun belum diisi"}
-                                          </p>
-
-                                          <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
-                                            <p>
-                                              Biaya admin:{" "}
-                                              <strong>
-                                                {formatRupiah(payment.biayaAdmin)}
-                                              </strong>
-                                            </p>
-                                            <p>
-                                              Bukti:{" "}
-                                              <strong>
-                                                {payment.buktiNama || "-"}
-                                              </strong>
-                                            </p>
-                                          </div>
-
-                                          {payment.catatan ? (
-                                            <p className="text-sm text-slate-500">
-                                              {payment.catatan}
-                                            </p>
-                                          ) : null}
-
-                                          {payment.buktiPath || proofPreviewUrl ? (
-                                            <div className="flex flex-wrap items-center gap-3">
-                                              {proofPreviewUrl ? (
-                                                <div className="inline-flex overflow-hidden rounded-2xl border bg-white p-2">
-                                                  <img
-                                                    src={proofPreviewUrl}
-                                                    alt={
-                                                      payment.buktiNama ||
-                                                      "Bukti transfer"
-                                                    }
-                                                    className="h-20 w-20 rounded-xl object-cover"
-                                                  />
-                                                </div>
-                                              ) : null}
-
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  openVendorProof(payment)
-                                                }
-                                                className={smallButton}
-                                              >
-                                                Lihat bukti
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <p className="text-xs text-slate-400">
-                                              Belum ada bukti pembayaran.
-                                            </p>
-                                          )}
-                                        </div>
-
-                                        {canEdit ? (
-                                          <button
-                                            onClick={() =>
-                                              removeVendorPayment(payment)
-                                            }
-                                            className={smallButton}
-                                          >
-                                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                            Hapus
-                                          </button>
-                                        ) : null}
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            </div>
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              {item.vendor || "-"}
+                            </p>
                           </div>
-                        ) : null}
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
                         <button
                           onClick={() =>
                             setExpandedVendors((prev) => ({
@@ -860,6 +504,340 @@ export default function VendorPage({ app }) {
                         ) : null}
                       </div>
                     </div>
+
+                    <div className="mt-5 grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                          Total
+                        </p>
+                        <p className="mt-2 text-xl font-extrabold text-slate-900">
+                          {formatRupiah(item.nominal)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                          Sudah dibayar
+                        </p>
+                        <p className="mt-2 text-xl font-extrabold text-emerald-900">
+                          {formatRupiah(item.paid)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-rose-700">
+                          Sisa
+                        </p>
+                        <p className="mt-2 text-xl font-extrabold text-rose-900">
+                          {formatRupiah(item.remaining)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                        <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
+                          Jatuh tempo
+                        </p>
+                        <p className="mt-2 text-xl font-extrabold text-sky-900">
+                          {item.jatuhTempo || "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {item.catatan ? (
+                      <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                        {item.catatan}
+                      </div>
+                    ) : null}
+
+                    {isExpanded ? (
+                      <div className="mt-5 w-full space-y-5 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-xl font-bold text-slate-900">
+                            Detail Tagihan
+                          </h3>
+
+                          <div className="mt-5 grid w-full grid-cols-1 gap-6 lg:grid-cols-2">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Nama tagihan
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.nama}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Vendor
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.vendor || "-"}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Kategori
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.kategori || "-"}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Jatuh tempo
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.jatuhTempo || "-"}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Status
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.status}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                Catatan
+                              </p>
+                              <p className="mt-1 text-base font-bold text-slate-900">
+                                {item.catatan || "-"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                          <h3 className="text-xl font-bold text-slate-900">
+                            Ringkasan Pembayaran
+                          </h3>
+
+                          <div className="mt-5 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="rounded-2xl bg-slate-50 p-4">
+                              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                Total tagihan
+                              </p>
+                              <p className="mt-2 text-xl font-extrabold text-slate-900">
+                                {formatRupiah(item.nominal)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-emerald-50 p-4">
+                              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                                Sudah dibayar
+                              </p>
+                              <p className="mt-2 text-xl font-extrabold text-emerald-900">
+                                {formatRupiah(totalPaid)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-rose-50 p-4">
+                              <p className="text-xs font-bold uppercase tracking-wide text-rose-700">
+                                Sisa tagihan
+                              </p>
+                              <p className="mt-2 text-xl font-extrabold text-rose-900">
+                                {formatRupiah(remaining)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-amber-50 p-4">
+                              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                                Biaya admin
+                              </p>
+                              <p className="mt-2 text-xl font-extrabold text-amber-900">
+                                {formatRupiah(totalAdmin)}
+                              </p>
+                            </div>
+
+                            {overpaid > 0 ? (
+                              <div className="rounded-2xl bg-amber-50 p-4">
+                                <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                                  Lebih bayar
+                                </p>
+                                <p className="mt-2 text-xl font-extrabold text-amber-900">
+                                  {formatRupiah(overpaid)}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <h3 className="text-xl font-bold text-slate-900">
+                                Riwayat Pembayaran Vendor
+                              </h3>
+                              <p className="mt-1 text-sm text-slate-500">
+                                Menampilkan semua pembayaran yang tertaut dengan
+                                tagihan ini.
+                              </p>
+                            </div>
+
+                            <Pill tone={getExpenseTone(item.status)}>
+                              {item.status}
+                            </Pill>
+                          </div>
+
+                          <div className="mt-6 space-y-4">
+                            {payments.length === 0 ? (
+                              <p className="rounded-2xl border border-dashed bg-slate-50 p-5 text-sm text-slate-500">
+                                Belum ada pembayaran untuk tagihan ini.
+                              </p>
+                            ) : (
+                              payments.map((payment) => {
+                                const proofPreviewUrl =
+                                  vendorProofPreviewUrls[payment.id] ||
+                                  payment.buktiDataUrl;
+
+                                return (
+                                  <div
+                                    key={payment.id}
+                                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-5"
+                                  >
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div className="min-w-0 flex-1 space-y-4">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                          <p className="text-2xl font-extrabold text-slate-900">
+                                            {formatRupiah(payment.nominal)}
+                                          </p>
+                                          <Pill>{payment.jenis}</Pill>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                              Tanggal
+                                            </p>
+                                            <p className="mt-1 font-semibold text-slate-800">
+                                              {payment.tanggal || "-"}
+                                            </p>
+                                          </div>
+
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                              Metode
+                                            </p>
+                                            <p className="mt-1 font-semibold text-slate-800">
+                                              {payment.metode || "-"}
+                                            </p>
+                                          </div>
+
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                              Akun tujuan
+                                            </p>
+                                            <p className="mt-1 font-semibold text-slate-800">
+                                              {payment.akunTujuan ||
+                                                "Akun belum diisi"}
+                                            </p>
+                                          </div>
+
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                                              Biaya admin
+                                            </p>
+                                            <p className="mt-1 font-semibold text-slate-800">
+                                              {formatRupiah(payment.biayaAdmin)}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        {payment.catatan ? (
+                                          <p className="rounded-xl bg-white p-3 text-sm text-slate-600">
+                                            {payment.catatan}
+                                          </p>
+                                        ) : null}
+
+                                        {payment.buktiPath || proofPreviewUrl ? (
+                                          <div className="flex flex-wrap items-center gap-3">
+                                            {proofPreviewUrl ? (
+                                              <div className="inline-flex overflow-hidden rounded-2xl border bg-white p-2">
+                                                <img
+                                                  src={proofPreviewUrl}
+                                                  alt={
+                                                    payment.buktiNama ||
+                                                    "Bukti transfer"
+                                                  }
+                                                  className="h-20 w-20 rounded-xl object-cover"
+                                                />
+                                              </div>
+                                            ) : null}
+
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                openVendorProof(payment)
+                                              }
+                                              className={smallButton}
+                                            >
+                                              Lihat bukti
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-slate-400">
+                                            Belum ada bukti pembayaran.
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {canEdit ? (
+                                        <button
+                                          onClick={() =>
+                                            removeVendorPayment(payment)
+                                          }
+                                          className={smallButton}
+                                        >
+                                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                          Hapus
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+
+                        {canEdit ? (
+                          <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 className="text-xl font-bold text-slate-900">
+                              Aksi Cepat
+                            </h3>
+
+                            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                              <button
+                                onClick={() => {
+                                  setVendorView("pembayaran");
+                                  setVendorPaymentForm((prev) => ({
+                                    ...prev,
+                                    expenseId: item.id,
+                                    vendorManual: item.vendor || item.nama,
+                                  }));
+                                }}
+                                className={buttonPrimary}
+                              >
+                                Catat pembayaran
+                              </button>
+
+                              <button
+                                onClick={() => editExpense(item)}
+                                className={buttonOutline}
+                              >
+                                Edit tagihan
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -881,7 +859,9 @@ export default function VendorPage({ app }) {
     >
       <div
         className={
-          canEdit ? "grid gap-6 2xl:grid-cols-[0.88fr_1.12fr]" : "grid gap-6"
+          canEdit
+            ? "grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]"
+            : "grid gap-6"
         }
       >
         {canEdit ? (
@@ -1127,7 +1107,7 @@ export default function VendorPage({ app }) {
           </div>
         ) : null}
 
-        <div className="space-y-4">
+        <div className="min-w-0 w-full space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             <MiniStat
               label="Total pembayaran"
@@ -1168,7 +1148,7 @@ export default function VendorPage({ app }) {
           {filteredVendorPayments.length === 0 ? (
             <EmptyState text="Belum ada pembayaran vendor pada filter ini." />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredVendorPayments.map((item) => {
                 const linkedExpense = expenseLookup[String(item.expenseId)];
                 const vendorName =
@@ -1179,13 +1159,16 @@ export default function VendorPage({ app }) {
                   vendorProofPreviewUrls[item.id] || item.buktiDataUrl;
 
                 return (
-                  <div key={item.id} className="rounded-2xl border bg-white p-4">
+                  <div
+                    key={item.id}
+                    className="w-full rounded-3xl border bg-white p-5 shadow-sm"
+                  >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="space-y-2">
+                      <div className="min-w-0 flex-1 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold text-slate-900">
+                          <h3 className="text-lg font-bold text-slate-900">
                             {vendorName}
-                          </p>
+                          </h3>
                           <Pill
                             tone={
                               linkedExpense
@@ -1205,25 +1188,48 @@ export default function VendorPage({ app }) {
                           {item.tanggal || "-"} · {item.metode || "-"}
                         </p>
 
-                        <div className="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
-                          <p>
-                            Nominal: <strong>{formatRupiah(item.nominal)}</strong>
-                          </p>
-                          <p>
-                            Admin: <strong>{formatRupiah(item.biayaAdmin)}</strong>
-                          </p>
-                          <p>
-                            Akun tujuan:{" "}
-                            <strong>{item.akunTujuan || "-"}</strong>
-                          </p>
-                          <p>
-                            Status tagihan:{" "}
-                            <strong>{linkedExpense?.status || "Manual"}</strong>
-                          </p>
+                        <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                              Nominal
+                            </p>
+                            <p className="mt-2 text-xl font-extrabold text-slate-900">
+                              {formatRupiah(item.nominal)}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl bg-rose-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-wide text-rose-700">
+                              Admin
+                            </p>
+                            <p className="mt-2 text-xl font-extrabold text-rose-900">
+                              {formatRupiah(item.biayaAdmin)}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                              Akun tujuan
+                            </p>
+                            <p className="mt-2 text-base font-extrabold text-slate-900">
+                              {item.akunTujuan || "-"}
+                            </p>
+                          </div>
+
+                          <div className="rounded-2xl bg-sky-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-wide text-sky-700">
+                              Status tagihan
+                            </p>
+                            <p className="mt-2 text-base font-extrabold text-sky-900">
+                              {linkedExpense?.status || "Manual"}
+                            </p>
+                          </div>
                         </div>
 
                         {item.catatan ? (
-                          <p className="text-sm text-slate-500">{item.catatan}</p>
+                          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                            {item.catatan}
+                          </p>
                         ) : null}
 
                         {item.buktiPath || proofPreviewUrl ? (
@@ -1297,6 +1303,7 @@ export default function VendorPage({ app }) {
       {vendorView === "tagihan" || vendorView === "semua"
         ? vendorBillsSection
         : null}
+
       {vendorView === "pembayaran" || vendorView === "semua"
         ? vendorPaymentsSection
         : null}

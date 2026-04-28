@@ -120,7 +120,7 @@ export default function App() {
 
   if (isCheckingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center bg-slate-100">
         <div className="rounded-3xl bg-white px-8 py-6 text-sm font-semibold text-slate-700 shadow-xl">
           Memeriksa akses...
         </div>
@@ -151,10 +151,13 @@ export default function App() {
 
       <ToastNotice toast={app.toast} />
 
-      <div className="mx-auto max-w-[1440px] px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
+      <div className="w-full max-w-none px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8 2xl:px-12">
         <Routes>
           <Route path="/" element={<HomePage app={appWithAuth} />} />
-          <Route path="/kegiatan" element={<KegiatanPage app={appWithAuth} />} />
+          <Route
+            path="/kegiatan"
+            element={<KegiatanPage app={appWithAuth} />}
+          />
           <Route path="/vendor" element={<VendorPage app={appWithAuth} />} />
           <Route path="/santri" element={<SantriPage app={appWithAuth} />} />
           <Route path="/buku-kas" element={<BukuKasPage app={appWithAuth} />} />
