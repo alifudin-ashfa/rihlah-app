@@ -23,6 +23,42 @@ function formatDate(value) {
   });
 }
 
+function openProofUrl(proofUrl) {
+  if (!proofUrl) {
+    window.alert("Bukti pembayaran tidak tersedia.");
+    return;
+  }
+
+  try {
+    if (!proofUrl.startsWith("data:")) {
+      window.open(proofUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const [header, base64Data] = proofUrl.split(",");
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mimeType = mimeMatch?.[1] || "application/octet-stream";
+
+    const binaryString = window.atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+
+    for (let index = 0; index < binaryString.length; index += 1) {
+      bytes[index] = binaryString.charCodeAt(index);
+    }
+
+    const blob = new Blob([bytes], { type: mimeType });
+    const blobUrl = URL.createObjectURL(blob);
+
+    window.open(blobUrl, "_blank", "noopener,noreferrer");
+
+    setTimeout(() => {
+      URL.revokeObjectURL(blobUrl);
+    }, 60_000);
+  } catch {
+    window.alert("Gagal membuka bukti pembayaran.");
+  }
+}
+
 function SummaryCard({ label, value, helper, tone = "slate" }) {
   const toneClass = {
     emerald: "border-emerald-200 bg-emerald-50 text-emerald-900",
@@ -67,43 +103,37 @@ export default function BukuKasPage({ app }) {
         otherIncomes,
         filters,
       }),
-    [
-      participants,
-      expenses,
-      vendorPayments,
-      otherIncomes,
-      filters,
-    ]
+    [participants, expenses, vendorPayments, otherIncomes, filters]
   );
 
   const summary = useMemo(() => buildCashbookSummary(rows), [rows]);
 
   const resetFilters = () => {
-  setFilters({
-    startDate: "",
-    endDate: "",
-    type: "all",
-    search: "",
-  });
-};
+    setFilters({
+      startDate: "",
+      endDate: "",
+      type: "all",
+      search: "",
+    });
+  };
 
-const handleExportExcel = () => {
-  exportCashbookExcel({
-    rows,
-    summary,
-    filters,
-    fileName: "buku-kas-rihlah.xlsx",
-  });
-};
+  const handleExportExcel = () => {
+    exportCashbookExcel({
+      rows,
+      summary,
+      filters,
+      fileName: "buku-kas-rihlah.xlsx",
+    });
+  };
 
-const handleExportPdf = () => {
-  exportCashbookPdf({
-    rows,
-    summary,
-    filters,
-    fileName: "buku-kas-rihlah.pdf",
-  });
-};
+  const handleExportPdf = () => {
+    exportCashbookPdf({
+      rows,
+      summary,
+      filters,
+      fileName: "buku-kas-rihlah.pdf",
+    });
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -123,7 +153,7 @@ const handleExportPdf = () => {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             Mode:{" "}
             <span className="font-semibold text-slate-900">
-                {isViewerMode ? "Pelihat / Read-only" : "Pengelola"}
+              {isViewerMode ? "Pelihat / Read-only" : "Pengelola"}
             </span>
           </div>
         </div>
@@ -193,9 +223,7 @@ const handleExportPdf = () => {
           </label>
 
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-600">
-              Tipe
-            </span>
+            <span className="text-xs font-semibold text-slate-600">Tipe</span>
             <select
               value={filters.type}
               onChange={(event) =>
@@ -232,31 +260,31 @@ const handleExportPdf = () => {
         </div>
 
         <div className="mt-3 flex flex-wrap justify-end gap-2">
-            <button
-                type="button"
-                onClick={resetFilters}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
-            >
-                Reset filter
-            </button>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Reset filter
+          </button>
 
-            <button
-                type="button"
-                onClick={handleExportExcel}
-                disabled={rows.length === 0}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Download Excel
-            </button>
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            disabled={rows.length === 0}
+            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download Excel
+          </button>
 
-            <button
-                type="button"
-                onClick={handleExportPdf}
-                disabled={rows.length === 0}
-                className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                Download PDF
-            </button>
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            disabled={rows.length === 0}
+            className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Download PDF
+          </button>
         </div>
       </div>
 
@@ -286,12 +314,14 @@ const handleExportPdf = () => {
                   <th className="px-4 py-3">Bukti</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 text-slate-600">
                       {formatDate(row.date)}
                     </td>
+
                     <td className="px-4 py-3">
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -303,9 +333,11 @@ const handleExportPdf = () => {
                         {row.type === "income" ? "Masuk" : "Keluar"}
                       </span>
                     </td>
+
                     <td className="px-4 py-3 text-slate-700">
                       {row.category}
                     </td>
+
                     <td className="px-4 py-3">
                       <p className="font-semibold text-slate-900">
                         {row.description}
@@ -316,25 +348,28 @@ const handleExportPdf = () => {
                         </p>
                       ) : null}
                     </td>
+
                     <td className="px-4 py-3 text-right font-semibold text-emerald-700">
                       {row.income ? formatRupiah(row.income) : "-"}
                     </td>
+
                     <td className="px-4 py-3 text-right font-semibold text-rose-700">
                       {row.expense ? formatRupiah(row.expense) : "-"}
                     </td>
+
                     <td className="px-4 py-3 text-right font-bold text-slate-900">
                       {formatRupiah(row.runningBalance)}
                     </td>
+
                     <td className="px-4 py-3">
                       {row.proofUrl ? (
-                        <a
-                          href={row.proofUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => openProofUrl(row.proofUrl)}
                           className="font-semibold text-sky-700 hover:text-sky-900"
                         >
                           Lihat
-                        </a>
+                        </button>
                       ) : (
                         <span className="text-xs text-slate-400">
                           Belum ada
@@ -365,9 +400,11 @@ const handleExportPdf = () => {
                       {row.type === "income" ? "Masuk" : "Keluar"} ·{" "}
                       {row.category}
                     </span>
+
                     <h3 className="mt-3 font-bold text-slate-900">
                       {row.description}
                     </h3>
+
                     <p className="mt-1 text-xs text-slate-500">
                       {formatDate(row.date)}
                     </p>
@@ -381,7 +418,9 @@ const handleExportPdf = () => {
                     }`}
                   >
                     {row.type === "income" ? "+" : "-"}
-                    {formatRupiah(row.type === "income" ? row.income : row.expense)}
+                    {formatRupiah(
+                      row.type === "income" ? row.income : row.expense
+                    )}
                   </p>
                 </div>
 
@@ -399,14 +438,13 @@ const handleExportPdf = () => {
                 </div>
 
                 {row.proofUrl ? (
-                  <a
-                    href={row.proofUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openProofUrl(row.proofUrl)}
                     className="mt-3 inline-flex rounded-xl border border-sky-200 px-3 py-2 text-sm font-semibold text-sky-700"
                   >
                     Lihat bukti
-                  </a>
+                  </button>
                 ) : null}
               </article>
             ))}
