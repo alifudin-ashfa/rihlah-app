@@ -235,11 +235,31 @@ export default function SantriPage({ app }) {
       <Section id="santri" title="Rekap Santri dan Pembayaran Iuran">
         <div className="space-y-4 sm:space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <MiniStat label="Total santri" value={`${jumlahSantri} santri`} tone="sky" />
-            <MiniStat label="Lunas" value={`${jumlahLunas} santri`} tone="emerald" />
-            <MiniStat label="Cicilan" value={`${jumlahCicilan} santri`} tone="amber" />
-            <MiniStat label="Belum bayar" value={`${jumlahBelumBayar} santri`} tone="rose" />
-            <MiniStat label="Iuran masuk" value={formatRupiah(totalIuranMasuk)} tone="emerald" />
+            <MiniStat
+              label="Total santri"
+              value={`${jumlahSantri} santri`}
+              tone="sky"
+            />
+            <MiniStat
+              label="Lunas"
+              value={`${jumlahLunas} santri`}
+              tone="emerald"
+            />
+            <MiniStat
+              label="Cicilan"
+              value={`${jumlahCicilan} santri`}
+              tone="amber"
+            />
+            <MiniStat
+              label="Belum bayar"
+              value={`${jumlahBelumBayar} santri`}
+              tone="rose"
+            />
+            <MiniStat
+              label="Iuran masuk"
+              value={formatRupiah(totalIuranMasuk)}
+              tone="emerald"
+            />
             <MiniStat
               label="Tunggakan iuran"
               value={formatRupiah(totalIuranOutstanding)}
@@ -662,7 +682,8 @@ export default function SantriPage({ app }) {
                             Target: <strong>{formatRupiah(item.targetIuran)}</strong>
                           </p>
                           <p>
-                            Sudah bayar: <strong>{formatRupiah(item.totalPaid)}</strong>
+                            Sudah bayar:{" "}
+                            <strong>{formatRupiah(item.totalPaid)}</strong>
                           </p>
                           <p>
                             Sisa: <strong>{formatRupiah(item.remaining)}</strong>
@@ -678,91 +699,210 @@ export default function SantriPage({ app }) {
                         ) : null}
 
                         {isExpanded ? (
-                          <div className="rounded-2xl border bg-slate-50 p-3">
-                            <p className="text-sm font-medium text-slate-700">
-                              Histori pembayaran
-                            </p>
-
-                            <div className="mt-3 space-y-2">
-                              {item.payments.length === 0 ? (
-                                <p className="text-sm text-slate-500">
-                                  Belum ada transaksi pembayaran.
+                          <div className="rounded-2xl border bg-slate-50 p-4">
+                            <div className="grid gap-4 lg:grid-cols-3">
+                              <div className="rounded-2xl border bg-white p-4">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Biodata Santri
                                 </p>
-                              ) : (
-                                item.payments.map((payment) => (
-                                  <div
-                                    key={payment.id}
-                                    className="flex flex-col gap-2 rounded-xl border bg-white p-3 lg:flex-row lg:items-center lg:justify-between"
-                                  >
-                                    <div>
-                                      <p className="text-sm font-medium text-slate-900">
-                                        {formatRupiah(payment.nominal)}
-                                      </p>
-                                      <p className="text-sm text-slate-500">
-                                        {payment.tanggal || "-"} ·{" "}
-                                        {payment.metode || "-"} ·{" "}
-                                        {payment.akunMasuk || "Akun belum diisi"}
-                                      </p>
 
-                                      {payment.catatan ? (
-                                        <p className="mt-1 text-xs text-slate-500">
-                                          {payment.catatan}
-                                        </p>
-                                      ) : null}
+                                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                                  <p>
+                                    Nama:{" "}
+                                    <strong className="text-slate-900">
+                                      {item.nama}
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    Kelas:{" "}
+                                    <strong className="text-slate-900">
+                                      {item.kelas || "Tanpa kelas"}
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    Kamar/Kelompok:{" "}
+                                    <strong className="text-slate-900">
+                                      {item.kamar || "Tanpa kamar"}
+                                    </strong>
+                                  </p>
+                                  <p>
+                                    Status:{" "}
+                                    <strong className="text-slate-900">
+                                      {item.status}
+                                    </strong>
+                                  </p>
 
-                                      {payment.buktiDataUrl ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => openPaymentProof(payment)}
-                                          className="mt-2 inline-flex rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
-                                        >
-                                          Lihat bukti{" "}
-                                          {payment.buktiNama ? `(${payment.buktiNama})` : ""}
-                                        </button>
-                                      ) : (
-                                        <p className="mt-2 text-xs text-slate-400">
-                                          Belum ada bukti pembayaran.
-                                        </p>
-                                      )}
+                                  {item.catatan ? (
+                                    <p className="rounded-xl bg-slate-50 p-3 text-slate-600">
+                                      {item.catatan}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border bg-white p-4">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Ringkasan Iuran
+                                </p>
+
+                                <div className="mt-3 space-y-3">
+                                  <div>
+                                    <div className="flex items-center justify-between text-sm text-slate-600">
+                                      <span>Progress</span>
+                                      <strong className="text-slate-900">
+                                        {formatRupiah(item.totalPaid)} /{" "}
+                                        {formatRupiah(item.targetIuran)}
+                                      </strong>
+                                    </div>
+                                    <div className="mt-2">
+                                      <ProgressBar
+                                        value={item.totalPaid}
+                                        max={item.targetIuran}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid gap-2 text-sm">
+                                    <div className="rounded-xl bg-slate-50 p-3">
+                                      <p className="text-slate-500">Target iuran</p>
+                                      <p className="font-bold text-slate-900">
+                                        {formatRupiah(item.targetIuran)}
+                                      </p>
                                     </div>
 
-                                    {canEdit ? (
+                                    <div className="rounded-xl bg-emerald-50 p-3">
+                                      <p className="text-emerald-700">Sudah bayar</p>
+                                      <p className="font-bold text-emerald-900">
+                                        {formatRupiah(item.totalPaid)}
+                                      </p>
+                                    </div>
+
+                                    <div className="rounded-xl bg-amber-50 p-3">
+                                      <p className="text-amber-700">Sisa</p>
+                                      <p className="font-bold text-amber-900">
+                                        {formatRupiah(item.remaining)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl border bg-white p-4">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  Aksi Cepat
+                                </p>
+
+                                <div className="mt-3 flex flex-col gap-2">
+                                  {canEdit ? (
+                                    <>
                                       <button
                                         onClick={() =>
-                                          removeParticipantPayment(item.id, payment.id)
+                                          focusParticipantPaymentForm(item.id)
                                         }
-                                        className={smallButton}
+                                        className={buttonPrimary}
                                       >
-                                        <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                        Hapus
+                                        Catat pembayaran
                                       </button>
-                                    ) : null}
-                                  </div>
-                                ))
-                              )}
+                                      <button
+                                        onClick={() => editParticipant(item)}
+                                        className={buttonOutline}
+                                      >
+                                        Edit data santri
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                                      Mode pelihat hanya dapat melihat detail data.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 rounded-2xl border bg-white p-4">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    Riwayat Pembayaran
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    Menampilkan seluruh transaksi pembayaran santri ini.
+                                  </p>
+                                </div>
+                                <Pill tone={getParticipantTone(item.status)}>
+                                  {item.status}
+                                </Pill>
+                              </div>
+
+                              <div className="mt-4 space-y-2">
+                                {item.payments.length === 0 ? (
+                                  <p className="rounded-xl border border-dashed bg-slate-50 p-4 text-sm text-slate-500">
+                                    Belum ada transaksi pembayaran.
+                                  </p>
+                                ) : (
+                                  item.payments.map((payment) => (
+                                    <div
+                                      key={payment.id}
+                                      className="flex flex-col gap-3 rounded-xl border bg-slate-50 p-3 lg:flex-row lg:items-center lg:justify-between"
+                                    >
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">
+                                          {formatRupiah(payment.nominal)}
+                                        </p>
+                                        <p className="text-sm text-slate-500">
+                                          {payment.tanggal || "-"} ·{" "}
+                                          {payment.metode || "-"} ·{" "}
+                                          {payment.akunMasuk || "Akun belum diisi"}
+                                        </p>
+
+                                        {payment.catatan ? (
+                                          <p className="mt-1 text-xs text-slate-500">
+                                            {payment.catatan}
+                                          </p>
+                                        ) : null}
+
+                                        {payment.buktiDataUrl ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => openPaymentProof(payment)}
+                                            className="mt-2 inline-flex rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                                          >
+                                            Lihat bukti{" "}
+                                            {payment.buktiNama
+                                              ? `(${payment.buktiNama})`
+                                              : ""}
+                                          </button>
+                                        ) : (
+                                          <p className="mt-2 text-xs text-slate-400">
+                                            Belum ada bukti pembayaran.
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {canEdit ? (
+                                        <button
+                                          onClick={() =>
+                                            removeParticipantPayment(
+                                              item.id,
+                                              payment.id
+                                            )
+                                          }
+                                          className={smallButton}
+                                        >
+                                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                          Hapus
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  ))
+                                )}
+                              </div>
                             </div>
                           </div>
                         ) : null}
                       </div>
 
                       <div className="flex flex-wrap gap-2">
-                        {canEdit ? (
-                          <>
-                            <button
-                              onClick={() => focusParticipantPaymentForm(item.id)}
-                              className={smallButton}
-                            >
-                              Catat bayar
-                            </button>
-                            <button
-                              onClick={() => editParticipant(item)}
-                              className={smallButton}
-                            >
-                              Edit
-                            </button>
-                          </>
-                        ) : null}
-
                         <button
                           onClick={() =>
                             setExpandedParticipants((prev) => ({
@@ -772,7 +912,7 @@ export default function SantriPage({ app }) {
                           }
                           className={smallButton}
                         >
-                          {isExpanded ? "Sembunyikan histori" : "Lihat histori"}
+                          {isExpanded ? "Tutup detail" : "Detail"}
                         </button>
 
                         {canEdit ? (
