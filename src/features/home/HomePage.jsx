@@ -52,10 +52,14 @@ function DashboardMetric({ label, value, helper, tone = "slate" }) {
       }`}
     >
       <p className="text-sm font-semibold text-sky-100">{label}</p>
-      <p className="mt-2 break-words text-[clamp(1.25rem,1.8vw,2rem)] font-extrabold leading-tight tracking-tight tabular-nums">
+
+      <p className="mt-2 text-[clamp(1.15rem,1.25vw,1.55rem)] font-extrabold leading-snug tracking-tight text-white tabular-nums">
         {value}
       </p>
-      {helper ? <p className="mt-2 text-xs leading-5 text-sky-100">{helper}</p> : null}
+
+      {helper ? (
+        <p className="mt-2 text-xs leading-5 text-sky-100">{helper}</p>
+      ) : null}
     </div>
   );
 }
@@ -224,7 +228,7 @@ export default function HomePage({ app }) {
               operasional dari satu halaman ringkasan.
             </p>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               <DashboardMetric
                 label="Saldo kas saat ini"
                 value={formatRupiah(saldoKasSaatIni)}
