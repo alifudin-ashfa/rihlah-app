@@ -21,6 +21,14 @@ import {
   tabClass,
 } from "../../shared/lib/rihlahCore";
 
+const hasVendorProof = (payment) =>
+  Boolean(
+    payment?.buktiPath ||
+      payment?.buktiDataUrl ||
+      payment?.buktiUrl ||
+      payment?.buktiNama
+  );
+
 export default function VendorPage({ app }) {
   const {
     canEdit,
@@ -68,6 +76,7 @@ export default function VendorPage({ app }) {
 
   const [vendorProofPreviewUrls, setVendorProofPreviewUrls] = useState({});
   const [expandedVendors, setExpandedVendors] = useState({});
+  const [vendorProofFilter, setVendorProofFilter] = useState("all");
 
   const vendorProofPathSignature = useMemo(
     () =>
@@ -116,6 +125,37 @@ export default function VendorPage({ app }) {
       isCancelled = true;
     };
   }, [vendorProofPathSignature, vendorPaymentRows, refreshVendorProofUrl]);
+
+  const vendorProofSummary = useMemo(() => {
+    const rows = Array.isArray(filteredVendorPayments)
+      ? filteredVendorPayments
+      : [];
+
+    const withProof = rows.filter(hasVendorProof);
+    const withoutProof = rows.filter((payment) => !hasVendorProof(payment));
+
+    return {
+      total: rows.length,
+      withProof: withProof.length,
+      withoutProof: withoutProof.length,
+    };
+  }, [filteredVendorPayments]);
+
+  const filteredVendorPaymentsByProof = useMemo(() => {
+    const rows = Array.isArray(filteredVendorPayments)
+      ? filteredVendorPayments
+      : [];
+
+    if (vendorProofFilter === "with-proof") {
+      return rows.filter(hasVendorProof);
+    }
+
+    if (vendorProofFilter === "without-proof") {
+      return rows.filter((payment) => !hasVendorProof(payment));
+    }
+
+    return rows;
+  }, [filteredVendorPayments, vendorProofFilter]);
 
   const openDataOrUrl = (url) => {
     if (!url) {
@@ -205,6 +245,48 @@ export default function VendorPage({ app }) {
       </ol>
     </div>
   );
+
+  const renderProofBadge = (payment) => {
+    const proofExists = hasVendorProof(payment);
+
+    return (
+      <Pill tone={proofExists ? "emerald" : "rose"}>
+        {proofExists ? "Dengan bukti" : "Tanpa bukti"}
+      </Pill>
+    );
+  };
+
+  const renderProofAction = (payment, proofPreviewUrl) => {
+    const proofExists = hasVendorProof(payment) || proofPreviewUrl;
+
+    if (!proofExists) {
+      return (
+        <p className="text-xs text-slate-400">Belum ada bukti pembayaran.</p>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        {proofPreviewUrl ? (
+          <div className="inline-flex overflow-hidden rounded-2xl border bg-white p-2">
+            <img
+              src={proofPreviewUrl}
+              alt={payment.buktiNama || "Bukti transfer"}
+              className="h-20 w-20 rounded-xl object-cover"
+            />
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => openVendorProof(payment)}
+          className={smallButton}
+        >
+          Lihat bukti
+        </button>
+      </div>
+    );
+  };
 
   const vendorBillsSection = (
     <Section
@@ -708,6 +790,7 @@ export default function VendorPage({ app }) {
                                             {formatRupiah(payment.nominal)}
                                           </p>
                                           <Pill>{payment.jenis}</Pill>
+                                          {renderProofBadge(payment)}
                                         </div>
 
                                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -755,36 +838,7 @@ export default function VendorPage({ app }) {
                                           </p>
                                         ) : null}
 
-                                        {payment.buktiPath || proofPreviewUrl ? (
-                                          <div className="flex flex-wrap items-center gap-3">
-                                            {proofPreviewUrl ? (
-                                              <div className="inline-flex overflow-hidden rounded-2xl border bg-white p-2">
-                                                <img
-                                                  src={proofPreviewUrl}
-                                                  alt={
-                                                    payment.buktiNama ||
-                                                    "Bukti transfer"
-                                                  }
-                                                  className="h-20 w-20 rounded-xl object-cover"
-                                                />
-                                              </div>
-                                            ) : null}
-
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                openVendorProof(payment)
-                                              }
-                                              className={smallButton}
-                                            >
-                                              Lihat bukti
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <p className="text-xs text-slate-400">
-                                            Belum ada bukti pembayaran.
-                                          </p>
-                                        )}
+                                        {renderProofAction(payment, proofPreviewUrl)}
                                       </div>
 
                                       {canEdit ? (
@@ -1111,45 +1165,81 @@ export default function VendorPage({ app }) {
           <div className="grid gap-4 md:grid-cols-3">
             <MiniStat
               label="Total pembayaran"
-              value={formatRupiah(totalVendorPaid)}
+              value={`${vendorProofSummary.total} transaksi`}
               tone="amber"
             />
             <MiniStat
-              label="Total biaya admin"
-              value={formatRupiah(totalVendorAdmin)}
-              tone="rose"
+              label="Dengan bukti"
+              value={`${vendorProofSummary.withProof} transaksi`}
+              tone="emerald"
             />
             <MiniStat
-              label="Belum tertaut"
-              value={formatRupiah(totalVendorUnlinked)}
-              tone={totalVendorUnlinked > 0 ? "amber" : "slate"}
+              label="Tanpa bukti"
+              value={`${vendorProofSummary.withoutProof} transaksi`}
+              tone={vendorProofSummary.withoutProof > 0 ? "rose" : "slate"}
             />
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">
-                Filter Vendor
-              </p>
+          <div className="rounded-2xl border bg-slate-50 p-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Filter Pembayaran Vendor
+                </p>
+                <p className="text-sm text-slate-500">
+                  Gunakan filter bukti untuk audit pembayaran vendor yang sudah
+                  atau belum memiliki bukti transfer.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
+                <select
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
+                  value={selectedVendorFilter}
+                  onChange={(event) =>
+                    setSelectedVendorFilter(event.target.value)
+                  }
+                >
+                  {vendorFilterOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: "all", label: "Semua bukti" },
+                    { value: "with-proof", label: "Dengan bukti" },
+                    { value: "without-proof", label: "Tanpa bukti" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setVendorProofFilter(filter.value)}
+                      className={tabClass(vendorProofFilter === filter.value)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <select
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm"
-              value={selectedVendorFilter}
-              onChange={(event) => setSelectedVendorFilter(event.target.value)}
-            >
-              {vendorFilterOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
           </div>
 
-          {filteredVendorPayments.length === 0 ? (
-            <EmptyState text="Belum ada pembayaran vendor pada filter ini." />
+          {filteredVendorPaymentsByProof.length === 0 ? (
+            <EmptyState
+              text={
+                vendorProofFilter === "without-proof"
+                  ? "Tidak ada pembayaran vendor tanpa bukti pada filter ini."
+                  : vendorProofFilter === "with-proof"
+                    ? "Tidak ada pembayaran vendor dengan bukti pada filter ini."
+                    : "Belum ada pembayaran vendor pada filter ini."
+              }
+            />
           ) : (
             <div className="space-y-4">
-              {filteredVendorPayments.map((item) => {
+              {filteredVendorPaymentsByProof.map((item) => {
                 const linkedExpense = expenseLookup[String(item.expenseId)];
                 const vendorName =
                   linkedExpense?.vendor ||
@@ -1181,6 +1271,7 @@ export default function VendorPage({ app }) {
                           {!item.expenseId ? (
                             <Pill tone="amber">Belum tertaut</Pill>
                           ) : null}
+                          {renderProofBadge(item)}
                         </div>
 
                         <p className="text-sm text-slate-500">
@@ -1232,27 +1323,7 @@ export default function VendorPage({ app }) {
                           </p>
                         ) : null}
 
-                        {item.buktiPath || proofPreviewUrl ? (
-                          <div className="mt-2 flex flex-wrap items-center gap-3">
-                            {proofPreviewUrl ? (
-                              <div className="inline-flex overflow-hidden rounded-2xl border bg-slate-50 p-2">
-                                <img
-                                  src={proofPreviewUrl}
-                                  alt={item.buktiNama || "Bukti transfer"}
-                                  className="h-20 w-20 rounded-xl object-cover"
-                                />
-                              </div>
-                            ) : null}
-
-                            <button
-                              type="button"
-                              onClick={() => openVendorProof(item)}
-                              className={smallButton}
-                            >
-                              Lihat bukti
-                            </button>
-                          </div>
-                        ) : null}
+                        {renderProofAction(item, proofPreviewUrl)}
                       </div>
 
                       {canEdit ? (
