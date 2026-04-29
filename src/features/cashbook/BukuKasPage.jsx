@@ -23,6 +23,52 @@ function formatDate(value) {
   });
 }
 
+function formatDisplayDate(value) {
+  if (!value) return "";
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function buildPeriodLabel(startDate, endDate) {
+  if (startDate && endDate) {
+    return `${formatDisplayDate(startDate)} sampai ${formatDisplayDate(endDate)}`;
+  }
+
+  if (startDate) return `Mulai ${formatDisplayDate(startDate)}`;
+  if (endDate) return `Sampai ${formatDisplayDate(endDate)}`;
+
+  return "Semua tanggal";
+}
+
+function buildPeriodFileSuffix(startDate, endDate) {
+  if (startDate && endDate) return `${startDate}-sampai-${endDate}`;
+  if (startDate) return `mulai-${startDate}`;
+  if (endDate) return `sampai-${endDate}`;
+
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getTypeLabel(type) {
+  if (type === "income") return "Masuk";
+  if (type === "expense") return "Keluar";
+  return "Semua tipe";
+}
+
 function openProofUrl(proofUrl) {
   if (!proofUrl) {
     window.alert("Bukti pembayaran tidak tersedia.");
@@ -94,6 +140,20 @@ export default function BukuKasPage({ app }) {
     search: "",
   });
 
+  const periodLabel = useMemo(
+    () => buildPeriodLabel(filters.startDate, filters.endDate),
+    [filters.endDate, filters.startDate]
+  );
+
+  const periodFileSuffix = useMemo(
+    () => buildPeriodFileSuffix(filters.startDate, filters.endDate),
+    [filters.endDate, filters.startDate]
+  );
+
+  const hasActiveFilter = Boolean(
+    filters.startDate || filters.endDate || filters.type !== "all" || filters.search
+  );
+
   const rows = useMemo(
     () =>
       buildCashbookRows({
@@ -122,7 +182,7 @@ export default function BukuKasPage({ app }) {
       rows,
       summary,
       filters,
-      fileName: "buku-kas-rihlah.xlsx",
+      fileName: `buku-kas-rihlah-${periodFileSuffix}.xlsx`,
     });
   };
 
@@ -131,7 +191,7 @@ export default function BukuKasPage({ app }) {
       rows,
       summary,
       filters,
-      fileName: "buku-kas-rihlah.pdf",
+      fileName: `buku-kas-rihlah-${periodFileSuffix}.pdf`,
     });
   };
 
@@ -150,32 +210,37 @@ export default function BukuKasPage({ app }) {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Mode:{" "}
-            <span className="font-semibold text-slate-900">
-              {isViewerMode ? "Pelihat / Read-only" : "Pengelola"}
-            </span>
+          <div className="space-y-2 text-sm">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600">
+              Mode:{" "}
+              <span className="font-semibold text-slate-900">
+                {isViewerMode ? "Pelihat / Read-only" : "Pengelola"}
+              </span>
+            </div>
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sky-800">
+              Periode: <span className="font-semibold">{periodLabel}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
-          label="Total Masuk"
+          label="Masuk periode"
           value={formatRupiah(summary.totalIncome)}
-          helper="Iuran santri + pemasukan lain"
+          helper={`Iuran + pemasukan lain • ${periodLabel}`}
           tone="emerald"
         />
         <SummaryCard
-          label="Total Keluar"
+          label="Keluar periode"
           value={formatRupiah(summary.totalExpense)}
-          helper="Pembayaran vendor"
+          helper={`Pembayaran vendor • ${periodLabel}`}
           tone="rose"
         />
         <SummaryCard
           label="Saldo"
           value={formatRupiah(summary.balance)}
-          helper="Total masuk dikurangi total keluar"
+          helper="Masuk periode dikurangi keluar periode"
           tone={summary.balance >= 0 ? "sky" : "rose"}
         />
         <SummaryCard
@@ -187,6 +252,19 @@ export default function BukuKasPage({ app }) {
       </div>
 
       <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Filter periode Buku Kas</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Periode aktif: <span className="font-semibold text-slate-700">{periodLabel}</span>
+            </p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">
+            Tipe: {getTypeLabel(filters.type)}
+            {filters.search ? ` • Cari: ${filters.search}` : ""}
+          </div>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-5">
           <label className="space-y-1">
             <span className="text-xs font-semibold text-slate-600">
@@ -195,6 +273,7 @@ export default function BukuKasPage({ app }) {
             <input
               type="date"
               value={filters.startDate}
+              max={filters.endDate || undefined}
               onChange={(event) =>
                 setFilters((current) => ({
                   ...current,
@@ -212,6 +291,7 @@ export default function BukuKasPage({ app }) {
             <input
               type="date"
               value={filters.endDate}
+              min={filters.startDate || undefined}
               onChange={(event) =>
                 setFilters((current) => ({
                   ...current,
@@ -263,7 +343,8 @@ export default function BukuKasPage({ app }) {
           <button
             type="button"
             onClick={resetFilters}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            disabled={!hasActiveFilter}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Reset filter
           </button>
@@ -286,6 +367,10 @@ export default function BukuKasPage({ app }) {
             Download PDF
           </button>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+        Menampilkan <span className="font-semibold text-slate-900">{summary.transactionCount} transaksi</span> untuk periode <span className="font-semibold text-slate-900">{periodLabel}</span>.
       </div>
 
       {rows.length === 0 ? (
