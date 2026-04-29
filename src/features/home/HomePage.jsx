@@ -228,6 +228,62 @@ function ProgressPanel({
   );
 }
 
+function ChecklistItem({ title, description, status = "Perlu Dicek", actionTo, actionLabel }) {
+  const toneMap = {
+    Siap: {
+      wrapper: "border-emerald-200 bg-emerald-50",
+      icon: "bg-emerald-100 text-emerald-700",
+      pill: "bg-emerald-100 text-emerald-700",
+    },
+    "Perlu Dicek": {
+      wrapper: "border-amber-200 bg-amber-50",
+      icon: "bg-amber-100 text-amber-700",
+      pill: "bg-amber-100 text-amber-700",
+    },
+    "Belum Aman": {
+      wrapper: "border-rose-200 bg-rose-50",
+      icon: "bg-rose-100 text-rose-700",
+      pill: "bg-rose-100 text-rose-700",
+    },
+  };
+
+  const tone = toneMap[status] || toneMap["Perlu Dicek"];
+  const Icon = status === "Siap" ? CheckCircle2 : AlertTriangle;
+
+  return (
+    <div className={`rounded-2xl border p-4 ${tone.wrapper}`}>
+      <div className="flex items-start gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${tone.icon}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <p className="font-bold text-slate-900">{title}</p>
+            <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${tone.pill}`}>
+              {status}
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {description}
+          </p>
+
+          {actionTo && actionLabel ? (
+            <NavLink
+              to={actionTo}
+              className="mt-3 inline-flex rounded-xl border border-white/70 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {actionLabel}
+            </NavLink>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function HomePage({ app }) {
   const {
     config,
@@ -248,6 +304,8 @@ export default function HomePage({ app }) {
     totalLinkedVendorPaid,
     totalVendorOutstanding,
     totalVendorUnlinked,
+    totalVendorOverpaid = 0,
+    totalIuranOverpaid = 0,
     saldoKasSaatIni,
     proyeksiSaldoAkhir,
     jumlahSantri,
@@ -403,6 +461,106 @@ export default function HomePage({ app }) {
           : []),
       ]
     : globalWarnings;
+
+  const allParticipantPayments = Array.isArray(participantPaymentHistory)
+    ? participantPaymentHistory
+    : [];
+  const allVendorPayments = Array.isArray(vendorPaymentRows)
+    ? vendorPaymentRows
+    : [];
+  const allParticipantWithoutProof = allParticipantPayments.filter(
+    (payment) => !hasParticipantProof(payment)
+  );
+  const allVendorWithoutProof = allVendorPayments.filter(
+    (payment) => !hasVendorProof(payment)
+  );
+  const allParticipantWithoutProofAmount = sumNominal(allParticipantWithoutProof);
+  const allVendorWithoutProofAmount = sumNominal(allVendorWithoutProof);
+  const totalOverpaid = Number(totalVendorOverpaid || 0) + Number(totalIuranOverpaid || 0);
+
+  const readinessItems = [
+    {
+      title: "Status pembayaran santri",
+      status:
+        jumlahBelumBayar > 0
+          ? "Belum Aman"
+          : jumlahCicilan > 0
+            ? "Perlu Dicek"
+            : "Siap",
+      description:
+        jumlahBelumBayar > 0
+          ? `${jumlahBelumBayar} santri belum bayar dan ${jumlahCicilan} santri masih cicilan. Prioritaskan penagihan sebelum hari-H.`
+          : jumlahCicilan > 0
+            ? `${jumlahCicilan} santri masih cicilan. Pastikan jadwal pelunasan sudah jelas.`
+            : "Semua santri sudah lunas berdasarkan data saat ini.",
+      actionTo: "/santri",
+      actionLabel: "Cek Santri",
+    },
+    {
+      title: "Bukti iuran santri",
+      status: allParticipantWithoutProof.length > 0 ? "Belum Aman" : "Siap",
+      description:
+        allParticipantWithoutProof.length > 0
+          ? `${allParticipantWithoutProof.length} transaksi iuran belum memiliki bukti dengan nominal ${formatRupiah(allParticipantWithoutProofAmount)}.`
+          : "Semua transaksi iuran santri sudah memiliki bukti pembayaran.",
+      actionTo: "/laporan",
+      actionLabel: "Cek Audit",
+    },
+    {
+      title: "Bukti pembayaran vendor",
+      status: allVendorWithoutProof.length > 0 ? "Belum Aman" : "Siap",
+      description:
+        allVendorWithoutProof.length > 0
+          ? `${allVendorWithoutProof.length} pembayaran vendor belum memiliki bukti dengan nominal ${formatRupiah(allVendorWithoutProofAmount)}.`
+          : "Semua pembayaran vendor sudah memiliki bukti.",
+      actionTo: "/vendor",
+      actionLabel: "Cek Vendor",
+    },
+    {
+      title: "Tautan pembayaran vendor",
+      status: totalVendorUnlinked > 0 ? "Perlu Dicek" : "Siap",
+      description:
+        totalVendorUnlinked > 0
+          ? `Ada pembayaran vendor belum tertaut sebesar ${formatRupiah(totalVendorUnlinked)}. Tautkan ke tagihan agar laporan vendor akurat.`
+          : "Tidak ada pembayaran vendor yang belum tertaut.",
+      actionTo: "/vendor",
+      actionLabel: "Kelola Vendor",
+    },
+    {
+      title: "Selisih lebih bayar",
+      status: totalOverpaid > 0 ? "Perlu Dicek" : "Siap",
+      description:
+        totalOverpaid > 0
+          ? `Terdapat lebih bayar total ${formatRupiah(totalOverpaid)}. Cek kembali sebelum laporan final.`
+          : "Tidak ada selisih lebih bayar yang perlu ditindaklanjuti.",
+      actionTo: "/laporan",
+      actionLabel: "Buka Laporan",
+    },
+    {
+      title: "Export laporan final",
+      status: "Perlu Dicek",
+      description:
+        "Sebelum hari-H, download PDF laporan, PDF audit, dan export Buku Kas sebagai arsip panitia.",
+      actionTo: "/laporan",
+      actionLabel: "Export Laporan",
+    },
+    {
+      title: "Backup data terakhir",
+      status: "Perlu Dicek",
+      description:
+        "Buat Backup JSON setelah data santri, vendor, bukti, dan buku kas selesai dicek.",
+      actionTo: "/",
+      actionLabel: "Buka Utilitas",
+    },
+  ];
+
+  const readinessStatus = readinessItems.some((item) => item.status === "Belum Aman")
+    ? "Belum Aman"
+    : readinessItems.some((item) => item.status === "Perlu Dicek")
+      ? "Perlu Dicek"
+      : "Siap";
+  const readinessDoneCount = readinessItems.filter((item) => item.status === "Siap").length;
+  const readinessPercent = safePercent(readinessDoneCount, readinessItems.length);
 
   const resetDateFilter = () => {
     setFilterStartDate("");
@@ -609,6 +767,88 @@ export default function HomePage({ app }) {
           </div>
         ) : null}
       </div>
+
+      <Section
+        title="Checklist Kesiapan Rihlah"
+        subtitle="Pantauan cepat sebelum pelaksanaan Rihlah Al Yaqut tanggal 6–7 Mei 2026."
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex items-start gap-3">
+              <div
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                  readinessStatus === "Siap"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : readinessStatus === "Belum Aman"
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {readinessStatus === "Siap" ? (
+                  <CheckCircle2 className="h-6 w-6" />
+                ) : (
+                  <ClipboardList className="h-6 w-6" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-500">
+                  Status kesiapan
+                </p>
+                <p className="mt-1 text-2xl font-extrabold text-slate-900">
+                  {readinessStatus}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-600">
+                  Checklist selesai
+                </p>
+                <p className="font-bold text-slate-900">{readinessPercent}%</p>
+              </div>
+              <div className="mt-3">
+                <ProgressBar value={readinessDoneCount} max={readinessItems.length} />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-500">
+                {readinessDoneCount} dari {readinessItems.length} item sudah berstatus siap.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <MiniStat
+                label="Belum bayar"
+                value={`${jumlahBelumBayar} santri`}
+                tone={jumlahBelumBayar > 0 ? "rose" : "emerald"}
+              />
+              <MiniStat
+                label="Transaksi tanpa bukti"
+                value={`${allParticipantWithoutProof.length + allVendorWithoutProof.length}`}
+                helper={formatRupiah(allParticipantWithoutProofAmount + allVendorWithoutProofAmount)}
+                tone={allParticipantWithoutProof.length + allVendorWithoutProof.length > 0 ? "rose" : "emerald"}
+              />
+              <MiniStat
+                label="Belum tertaut"
+                value={formatRupiah(totalVendorUnlinked)}
+                tone={totalVendorUnlinked > 0 ? "amber" : "emerald"}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {readinessItems.map((item) => (
+              <ChecklistItem
+                key={item.title}
+                title={item.title}
+                description={item.description}
+                status={item.status}
+                actionTo={item.actionTo}
+                actionLabel={item.actionLabel}
+              />
+            ))}
+          </div>
+        </div>
+      </Section>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.55fr)]">
         <Section
