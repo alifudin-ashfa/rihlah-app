@@ -1,5 +1,11 @@
-import React, { useMemo } from "react";
-import { Download, AlertTriangle, Users, Wallet, FileText } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Download,
+  FileText,
+  Printer,
+  Users,
+  Wallet,
+} from "lucide-react";
 import {
   buttonOutline,
   formatRupiah,
@@ -22,7 +28,190 @@ const hasVendorProof = (payment) =>
       payment?.buktiNama
   );
 
+const formatPrintDate = () =>
+  new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+
+const PrintStyles = () => (
+  <style>{`
+    @media print {
+      @page {
+        size: A4;
+        margin: 14mm 12mm;
+      }
+
+      html,
+      body,
+      #root {
+        background: #ffffff !important;
+        color: #0f172a !important;
+      }
+
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      nav,
+      header,
+      aside,
+      .no-print,
+      .print-hidden,
+      button,
+      input[type="file"] {
+        display: none !important;
+      }
+
+      .print-root {
+        display: block !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
+      .print-section {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+
+      .print-audit-section {
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+
+      .print-card,
+      .print-row {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        box-shadow: none !important;
+      }
+
+      .print-grid-2 {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+      }
+
+      .print-grid-4 {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+      }
+
+      .print-appendix {
+        break-before: page;
+        page-break-before: always;
+      }
+
+      .print-compact * {
+        line-height: 1.35 !important;
+      }
+
+      .print-compact .rounded-3xl,
+      .print-compact .rounded-2xl,
+      .print-compact .rounded-xl {
+        border-radius: 10px !important;
+      }
+
+      .print-compact .p-6,
+      .print-compact .sm\\:p-6,
+      .print-compact .p-5 {
+        padding: 14px !important;
+      }
+
+      .print-compact .p-4 {
+        padding: 10px !important;
+      }
+
+      .print-compact .mt-6 {
+        margin-top: 14px !important;
+      }
+
+      .print-compact .mt-5,
+      .print-compact .mt-4,
+      .print-compact .space-y-5 > :not([hidden]) ~ :not([hidden]),
+      .print-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+        margin-top: 10px !important;
+      }
+
+      .print-compact .text-lg {
+        font-size: 14px !important;
+      }
+
+      .print-compact .text-sm {
+        font-size: 11px !important;
+      }
+
+      .print-compact .text-xs {
+        font-size: 10px !important;
+      }
+    }
+
+
+      .print-table-wrap {
+        display: block !important;
+        margin-top: 12px !important;
+      }
+
+      .print-table {
+        display: table !important;
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 10px !important;
+      }
+
+      .print-table th,
+      .print-table td {
+        border: 1px solid #cbd5e1 !important;
+        padding: 6px 7px !important;
+        text-align: left !important;
+        vertical-align: top !important;
+      }
+
+      .print-table th {
+        background: #f1f5f9 !important;
+        color: #334155 !important;
+        font-weight: 800 !important;
+      }
+
+      .print-table td:last-child,
+      .print-table th:last-child {
+        text-align: right !important;
+      }
+
+      .print-table-empty {
+        margin-top: 12px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
+        color: #475569 !important;
+        background: #f8fafc !important;
+        font-size: 11px !important;
+      }
+
+    @media screen {
+      .print-only {
+        display: none !important;
+      }
+    }
+  `}</style>
+);
+
 export default function LaporanPage({ app }) {
+  const [printScope, setPrintScope] = useState(null);
+
   const {
     canEdit,
     laporanView,
@@ -85,37 +274,104 @@ export default function LaporanPage({ app }) {
   );
 
   const hasMissingProof = auditProofSummary.totalWithoutProof > 0;
+  const printDate = useMemo(() => formatPrintDate(), []);
+
+  const requestPrint = (scope) => {
+    if (scope === "audit" && !canEdit) return;
+    setPrintScope(scope);
+
+    window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        window.print();
+      }, 80);
+    });
+  };
+
+  useEffect(() => {
+    const resetPrintScope = () => setPrintScope(null);
+    window.addEventListener("afterprint", resetPrintScope);
+    return () => window.removeEventListener("afterprint", resetPrintScope);
+  }, []);
+
+  const showReportSection =
+    printScope === "laporan" ||
+    (!printScope &&
+      (laporanView === "ringkasan" || laporanView === "operasional"));
+
+  const showOperationalAuditSection =
+    canEdit &&
+    !printScope &&
+    (laporanView === "operasional" || laporanView === "audit");
+
+  const showProofAuditSection =
+    canEdit && (printScope === "audit" || (!printScope && laporanView === "audit"));
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setLaporanView("ringkasan")}
-          className={tabClass(laporanView === "ringkasan")}
-        >
-          Ringkasan Eksekutif
-        </button>
+    <div className="print-root print-compact space-y-4 sm:space-y-6">
+      <PrintStyles />
 
-        <button
-          onClick={() => setLaporanView("operasional")}
-          className={tabClass(laporanView === "operasional")}
-        >
-          Detail Operasional
-        </button>
-
-        {canEdit ? (
-          <button
-            onClick={() => setLaporanView("audit")}
-            className={tabClass(laporanView === "audit")}
-          >
-            Audit data
-          </button>
-        ) : null}
+      <div className="print-only border-b border-slate-300 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+          Rihlah Pesantren Islam Al Yaqut
+        </p>
+        <h1 className="mt-2 text-2xl font-extrabold text-slate-950">
+          {printScope === "audit"
+            ? "Lampiran Audit Bukti Pembayaran"
+            : "Laporan Keuangan Kegiatan"}
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Dicetak pada {printDate}
+        </p>
       </div>
 
-      {laporanView === "ringkasan" || laporanView === "operasional" ? (
-        <Section id="laporan" title="Laporan dan Narasi Otomatis">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="no-print flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setLaporanView("ringkasan")}
+            className={tabClass(laporanView === "ringkasan")}
+          >
+            Ringkasan Eksekutif
+          </button>
+
+          <button
+            onClick={() => setLaporanView("operasional")}
+            className={tabClass(laporanView === "operasional")}
+          >
+            Detail Operasional
+          </button>
+
+          {canEdit ? (
+            <button
+              onClick={() => setLaporanView("audit")}
+              className={tabClass(laporanView === "audit")}
+            >
+              Audit data
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => requestPrint("laporan")} className={buttonOutline}>
+            <Printer className="mr-2 h-4 w-4" />
+            Cetak Laporan
+          </button>
+
+          {canEdit ? (
+            <button onClick={() => requestPrint("audit")} className={buttonOutline}>
+              <Printer className="mr-2 h-4 w-4" />
+              Cetak Audit
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {showReportSection ? (
+        <Section
+          id="laporan"
+          title="Laporan dan Narasi Otomatis"
+          className="print-section"
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
             <MiniStat
               label="Total target iuran"
               value={formatRupiah(totalIuranTarget)}
@@ -158,7 +414,7 @@ export default function LaporanPage({ app }) {
             />
           </div>
 
-          <div className="mt-6 grid gap-4 2xl:grid-cols-2">
+          <div className="mt-6 grid gap-4 2xl:grid-cols-2 print-grid-2">
             <InlineBanner
               title="Narasi pimpinan"
               text={`Kas saat ini ${formatRupiah(
@@ -179,16 +435,58 @@ export default function LaporanPage({ app }) {
               tone={totalVendorOutstanding > 0 ? "amber" : "emerald"}
             />
           </div>
+
+          <div className="print-only mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm font-bold text-slate-900">
+              Ringkasan audit cepat
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
+              <MiniStat
+                label="Transaksi tanpa bukti"
+                value={`${auditProofSummary.totalWithoutProof} transaksi`}
+                tone={hasMissingProof ? "rose" : "emerald"}
+              />
+              <MiniStat
+                label="Nominal tanpa bukti"
+                value={formatRupiah(
+                  auditProofSummary.participantWithoutProofAmount +
+                    auditProofSummary.vendorWithoutProofAmount
+                )}
+                tone={
+                  auditProofSummary.participantWithoutProofAmount +
+                    auditProofSummary.vendorWithoutProofAmount >
+                  0
+                    ? "rose"
+                    : "emerald"
+                }
+              />
+              <MiniStat
+                label="Belum tertaut"
+                value={formatRupiah(totalVendorUnlinked)}
+                tone={totalVendorUnlinked > 0 ? "amber" : "slate"}
+              />
+              <MiniStat
+                label="Lebih bayar total"
+                value={formatRupiah(totalVendorOverpaid + totalIuranOverpaid)}
+                tone={
+                  totalVendorOverpaid + totalIuranOverpaid > 0
+                    ? "amber"
+                    : "slate"
+                }
+              />
+            </div>
+          </div>
         </Section>
       ) : null}
 
-      {canEdit && (laporanView === "operasional" || laporanView === "audit") ? (
+      {showOperationalAuditSection ? (
         <Section
           title="Audit data dan tindak lanjut"
           subtitle="Pisahkan review audit dari ringkasan agar lebih mudah dibaca saat rapat atau pengecekan internal."
+          className="print-section"
         >
-          <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6">
-            <div className="space-y-3">
+          <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6 print-grid-2">
+            <div className="space-y-3 print-card">
               <h3 className="text-lg font-semibold text-slate-900">
                 Item yang perlu dicek
               </h3>
@@ -207,14 +505,14 @@ export default function LaporanPage({ app }) {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 print-card">
               <h3 className="text-lg font-semibold text-slate-900">
                 Aksi laporan
               </h3>
 
-              <div className="rounded-2xl border bg-slate-50 p-4">
+              <div className="rounded-2xl border bg-slate-50 p-4 print-card">
                 {canEdit ? (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                  <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <button onClick={exportCsvReport} className={buttonOutline}>
                       <Download className="mr-2 h-4 w-4" />
                       Export CSV
@@ -246,12 +544,12 @@ export default function LaporanPage({ app }) {
                 </p>
               </div>
 
-              <div className="rounded-2xl border bg-slate-50 p-4">
+              <div className="rounded-2xl border bg-slate-50 p-4 print-card">
                 <p className="text-sm font-semibold text-slate-700">
                   Ringkasan audit cepat
                 </p>
 
-                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div className="mt-3 grid gap-3 lg:grid-cols-2 print-grid-2">
                   <MiniStat
                     label="Belum tertaut"
                     value={formatRupiah(totalVendorUnlinked)}
@@ -273,13 +571,14 @@ export default function LaporanPage({ app }) {
         </Section>
       ) : null}
 
-      {canEdit && laporanView === "audit" ? (
+      {showProofAuditSection ? (
         <Section
           title="Audit Bukti Pembayaran"
           subtitle="Daftar transaksi yang belum memiliki bukti pembayaran, baik dari iuran santri maupun pembayaran vendor."
+          className="print-section print-audit-section"
         >
           <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
               <MiniStat
                 label="Iuran tanpa bukti"
                 value={`${auditProofSummary.participantWithoutProofCount} transaksi`}
@@ -328,8 +627,8 @@ export default function LaporanPage({ app }) {
               />
             )}
 
-            <div className="grid gap-5 2xl:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid gap-5 2xl:grid-cols-2 print-grid-2">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
                 <div className="flex items-start gap-3">
                   <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
                     <Users className="h-5 w-5" />
@@ -344,14 +643,47 @@ export default function LaporanPage({ app }) {
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
+                <div className="print-only print-table-wrap">
+                  {participantWithoutProof.length === 0 ? (
+                    <div className="print-table-empty">
+                      Semua transaksi iuran sudah memiliki bukti.
+                    </div>
+                  ) : (
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th>Nama santri</th>
+                          <th>Kelas</th>
+                          <th>Tanggal</th>
+                          <th>Metode</th>
+                          <th>Catatan</th>
+                          <th>Nominal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {participantWithoutProof.map((payment) => (
+                          <tr key={`print-${payment.id}`}>
+                            <td>{payment.participantName || "Santri tidak diketahui"}</td>
+                            <td>{payment.participantClass || "Tanpa kelas"}</td>
+                            <td>{payment.tanggal || "-"}</td>
+                            <td>{payment.metode || "-"}</td>
+                            <td>{payment.catatan || "-"}</td>
+                            <td>{formatRupiah(payment.nominal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="no-print mt-5 space-y-3">
                   {participantWithoutProof.length === 0 ? (
                     <EmptyState text="Semua transaksi iuran sudah memiliki bukti." />
                   ) : (
                     participantWithoutProof.map((payment) => (
                       <div
                         key={payment.id}
-                        className="rounded-2xl border bg-slate-50 p-4"
+                        className="rounded-2xl border bg-slate-50 p-4 print-row"
                       >
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
@@ -384,7 +716,7 @@ export default function LaporanPage({ app }) {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
                 <div className="flex items-start gap-3">
                   <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
                     <Wallet className="h-5 w-5" />
@@ -400,7 +732,54 @@ export default function LaporanPage({ app }) {
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
+                <div className="print-only print-table-wrap">
+                  {vendorWithoutProof.length === 0 ? (
+                    <div className="print-table-empty">
+                      Semua pembayaran vendor sudah memiliki bukti.
+                    </div>
+                  ) : (
+                    <table className="print-table">
+                      <thead>
+                        <tr>
+                          <th>Vendor</th>
+                          <th>Keperluan</th>
+                          <th>Tanggal</th>
+                          <th>Metode</th>
+                          <th>Jenis</th>
+                          <th>Akun tujuan</th>
+                          <th>Catatan</th>
+                          <th>Nominal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vendorWithoutProof.map((payment) => {
+                          const linkedExpense = expenseLookup[String(payment.expenseId)];
+                          const vendorName =
+                            linkedExpense?.vendor ||
+                            payment.vendorSnapshot ||
+                            "Belum ditautkan";
+                          const expenseName =
+                            linkedExpense?.nama || "Pembayaran manual";
+
+                          return (
+                            <tr key={`print-${payment.id}`}>
+                              <td>{vendorName}</td>
+                              <td>{expenseName}</td>
+                              <td>{payment.tanggal || "-"}</td>
+                              <td>{payment.metode || "-"}</td>
+                              <td>{payment.jenis || "-"}</td>
+                              <td>{payment.akunTujuan || "-"}</td>
+                              <td>{payment.catatan || "-"}</td>
+                              <td>{formatRupiah(payment.nominal)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div className="no-print mt-5 space-y-3">
                   {vendorWithoutProof.length === 0 ? (
                     <EmptyState text="Semua pembayaran vendor sudah memiliki bukti." />
                   ) : (
@@ -416,7 +795,7 @@ export default function LaporanPage({ app }) {
                       return (
                         <div
                           key={payment.id}
-                          className="rounded-2xl border bg-slate-50 p-4"
+                          className="rounded-2xl border bg-slate-50 p-4 print-row"
                         >
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div>
@@ -432,7 +811,7 @@ export default function LaporanPage({ app }) {
                                 {payment.metode || "-"}
                               </p>
 
-                              <div className="mt-2 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                              <div className="mt-2 grid gap-2 text-sm text-slate-600 sm:grid-cols-2 print-grid-2">
                                 <p>
                                   Jenis:{" "}
                                   <strong className="text-slate-900">
@@ -466,7 +845,7 @@ export default function LaporanPage({ app }) {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 print-card">
               <div className="flex items-start gap-3">
                 <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
                   <FileText className="h-5 w-5" />
