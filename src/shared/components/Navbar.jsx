@@ -39,7 +39,8 @@ export default function Navbar({
 
           <div className="min-w-0 leading-tight">
             <p className="truncate text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
-              Rihlah Al Yaqut
+              {/* Rihlah Al Yaqut */}
+              Al Yaqut
             </p>
             <p className="hidden truncate text-xs text-sky-100 sm:block">Administrasi kegiatan rihlah</p>
           </div>
