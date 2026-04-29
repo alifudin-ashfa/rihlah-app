@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   Download,
   FileText,
@@ -36,6 +38,92 @@ const formatPrintDate = () =>
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date());
+
+const formatFileDate = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
+const sanitizePdfText = (value) =>
+  String(value ?? "-")
+    .replace(/\u00a0/g, " ")
+    .replace(/\u2011/g, "-")
+    .replace(/\uFFFE/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const rupiahForPdf = (value) => sanitizePdfText(formatRupiah(value));
+
+const addPdfHeader = (doc, title, printedAt) => {
+  doc.setProperties({
+    title,
+    subject: "Rihlah Pesantren Islam Al Yaqut",
+    creator: "Rihlah App",
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text("RIHLAH PESANTREN ISLAM AL YAQUT", 14, 16);
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(18);
+  doc.text(title, 14, 25);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Dibuat pada ${sanitizePdfText(printedAt)}`, 14, 32);
+
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, 38, 196, 38);
+
+  return 46;
+};
+
+const addPdfFooter = (doc, printedAt) => {
+  const pageCount = doc.getNumberOfPages();
+
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Rihlah Al Yaqut • ${sanitizePdfText(printedAt)}`,
+      14,
+      287
+    );
+    doc.text(`Halaman ${page} dari ${pageCount}`, 196, 287, {
+      align: "right",
+    });
+  }
+};
+
+const pdfTableTheme = {
+  theme: "grid",
+  styles: {
+    font: "helvetica",
+    fontSize: 8,
+    cellPadding: 2,
+    textColor: [15, 23, 42],
+    lineColor: [203, 213, 225],
+    lineWidth: 0.2,
+    overflow: "linebreak",
+  },
+  headStyles: {
+    fillColor: [241, 245, 249],
+    textColor: [51, 65, 85],
+    fontStyle: "bold",
+  },
+  alternateRowStyles: {
+    fillColor: [248, 250, 252],
+  },
+};
 
 const PrintStyles = () => (
   <style>{`
@@ -322,6 +410,11 @@ export default function LaporanPage({ app }) {
     return rows.filter((payment) => !hasVendorProof(payment));
   }, [vendorPaymentRows]);
 
+  const vendorAuditRows = useMemo(
+    () => (Array.isArray(vendorPaymentRows) ? vendorPaymentRows : []),
+    [vendorPaymentRows]
+  );
+
   const auditProofSummary = useMemo(
     () => ({
       participantWithoutProofCount: participantWithoutProof.length,
@@ -373,6 +466,272 @@ export default function LaporanPage({ app }) {
   const showProofAuditSection =
     canEdit && (printScope === "audit" || (!printScope && laporanView === "audit"));
 
+  const downloadReportPdf = () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const generatedAt = formatPrintDate();
+    let y = addPdfHeader(doc, "Laporan Keuangan Kegiatan", generatedAt);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Komponen", "Nilai"]],
+      body: [
+        ["Total target iuran", rupiahForPdf(totalIuranTarget)],
+        ["Total iuran masuk", rupiahForPdf(totalIuranMasuk)],
+        ["Total tagihan vendor", rupiahForPdf(totalTagihan)],
+        ["Pembayaran vendor + admin", rupiahForPdf(totalArusKeluarVendor)],
+        ["Saldo kas saat ini", rupiahForPdf(saldoKasSaatIni)],
+        ["Proyeksi saldo akhir", rupiahForPdf(proyeksiSaldoAkhir)],
+        ["Sisa tagihan vendor", rupiahForPdf(totalVendorOutstanding)],
+        ["Pemasukan lain", rupiahForPdf(totalOtherIncome)],
+      ],
+      columnStyles: {
+        0: { cellWidth: 95 },
+        1: { cellWidth: 87, halign: "right", fontStyle: "bold" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Narasi", "Keterangan"]],
+      body: [
+        [
+          "Narasi pimpinan",
+          `Kas saat ini ${rupiahForPdf(
+            saldoKasSaatIni
+          )}. Masih ada tunggakan iuran ${rupiahForPdf(
+            totalIuranOutstanding
+          )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`,
+        ],
+        [
+          "Narasi vendor",
+          `Sisa tagihan vendor ${rupiahForPdf(
+            totalVendorOutstanding
+          )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${rupiahForPdf(
+            proyeksiSaldoAkhir
+          )}.`,
+        ],
+      ],
+      columnStyles: {
+        0: { cellWidth: 42, fontStyle: "bold" },
+        1: { cellWidth: 140 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Ringkasan Audit Cepat", "Nilai"]],
+      body: [
+        ["Transaksi tanpa bukti", `${auditProofSummary.totalWithoutProof} transaksi`],
+        [
+          "Nominal tanpa bukti",
+          rupiahForPdf(
+            auditProofSummary.participantWithoutProofAmount +
+              auditProofSummary.vendorWithoutProofAmount
+          ),
+        ],
+        ["Belum tertaut", rupiahForPdf(totalVendorUnlinked)],
+        [
+          "Lebih bayar total",
+          rupiahForPdf(totalVendorOverpaid + totalIuranOverpaid),
+        ],
+      ],
+      columnStyles: {
+        0: { cellWidth: 95 },
+        1: { cellWidth: 87, halign: "right", fontStyle: "bold" },
+      },
+    });
+
+    addPdfFooter(doc, generatedAt);
+    doc.save(`laporan-keuangan-rihlah-${formatFileDate()}.pdf`);
+  };
+
+  const downloadAuditPdf = () => {
+    if (!canEdit) return;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const generatedAt = formatPrintDate();
+    let y = addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Ringkasan Audit", "Nilai"]],
+      body: [
+        [
+          "Iuran tanpa bukti",
+          `${auditProofSummary.participantWithoutProofCount} transaksi`,
+        ],
+        [
+          "Nominal iuran tanpa bukti",
+          rupiahForPdf(auditProofSummary.participantWithoutProofAmount),
+        ],
+        [
+          "Vendor tanpa bukti",
+          `${auditProofSummary.vendorWithoutProofCount} transaksi`,
+        ],
+        [
+          "Total transaksi tanpa bukti",
+          `${auditProofSummary.totalWithoutProof} transaksi`,
+        ],
+      ],
+      columnStyles: {
+        0: { cellWidth: 95 },
+        1: { cellWidth: 87, halign: "right", fontStyle: "bold" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Iuran Santri Tanpa Bukti", 14, y);
+    y += 5;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Nama santri", "Kelas", "Tanggal", "Metode", "Catatan", "Nominal"]],
+      body:
+        participantWithoutProof.length > 0
+          ? participantWithoutProof.map((payment) => [
+              sanitizePdfText(payment.participantName || "Santri tidak diketahui"),
+              sanitizePdfText(payment.participantClass || "Tanpa kelas"),
+              sanitizePdfText(payment.tanggal || "-"),
+              sanitizePdfText(payment.metode || "-"),
+              sanitizePdfText(payment.catatan || "-"),
+              rupiahForPdf(payment.nominal),
+            ])
+          : [["Semua transaksi iuran sudah memiliki bukti.", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 7.2,
+        cellPadding: 1.7,
+      },
+      columnStyles: {
+        0: { cellWidth: 58, fontStyle: "bold" },
+        1: { cellWidth: 13, halign: "center" },
+        2: { cellWidth: 24 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 35 },
+        5: { cellWidth: 30, halign: "right", fontStyle: "bold" },
+      },
+      didDrawPage: () => {},
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (y > 245) {
+      doc.addPage();
+      y = 16;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Daftar Pembayaran Vendor", 14, y);
+    y += 5;
+
+    const vendorBody =
+      vendorAuditRows.length > 0
+        ? vendorAuditRows.map((payment) => {
+            const linkedExpense = expenseLookup?.[String(payment.expenseId)];
+            const vendorName =
+              linkedExpense?.vendor ||
+              payment.vendorSnapshot ||
+              "Belum ditautkan";
+            const expenseName = linkedExpense?.nama || "Pembayaran manual";
+            const proofStatus = hasVendorProof(payment) ? "Ada bukti" : "Tanpa bukti";
+
+            return [
+              sanitizePdfText(vendorName),
+              sanitizePdfText(expenseName),
+              sanitizePdfText(payment.tanggal || "-"),
+              sanitizePdfText(payment.metode || "-"),
+              sanitizePdfText(payment.jenis || "-"),
+              sanitizePdfText(payment.akunTujuan || "-"),
+              sanitizePdfText(payment.catatan || "-"),
+              rupiahForPdf(payment.nominal),
+              proofStatus,
+            ];
+          })
+        : [["Belum ada pembayaran vendor.", "", "", "", "", "", "", "", ""]];
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [
+        [
+          "Vendor",
+          "Keperluan",
+          "Tanggal",
+          "Metode",
+          "Jenis",
+          "Akun tujuan",
+          "Catatan",
+          "Nominal",
+          "Status bukti",
+        ],
+      ],
+      body: vendorBody,
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.2,
+        cellPadding: 1.3,
+      },
+      columnStyles: {
+        0: { cellWidth: 26, fontStyle: "bold" },
+        1: { cellWidth: 29 },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 14 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 22 },
+        7: { cellWidth: 20, halign: "right", fontStyle: "bold" },
+        8: { cellWidth: 16, fontStyle: "bold" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (y > 255) {
+      doc.addPage();
+      y = 16;
+    }
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Catatan audit bukti pembayaran"]],
+      body: [
+        [
+          "Transaksi dianggap lengkap jika memiliki data bukti seperti file, data URL, URL, path storage, atau nama bukti yang tersimpan. Jika ada transaksi tanpa bukti, lengkapi dari halaman Santri atau Vendor sesuai jenis transaksinya.",
+        ],
+      ],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 8,
+      },
+    });
+
+    addPdfFooter(doc, generatedAt);
+    doc.save(`audit-bukti-pembayaran-rihlah-${formatFileDate()}.pdf`);
+  };
+
   return (
     <div className="print-root print-compact space-y-4 sm:space-y-6">
       <PrintStyles />
@@ -423,11 +782,23 @@ export default function LaporanPage({ app }) {
             Cetak Laporan
           </button>
 
+          <button onClick={downloadReportPdf} className={buttonOutline}>
+            <Download className="mr-2 h-4 w-4" />
+            Download PDF Laporan
+          </button>
+
           {canEdit ? (
-            <button onClick={() => requestPrint("audit")} className={buttonOutline}>
-              <Printer className="mr-2 h-4 w-4" />
-              Cetak Audit
-            </button>
+            <>
+              <button onClick={() => requestPrint("audit")} className={buttonOutline}>
+                <Printer className="mr-2 h-4 w-4" />
+                Cetak Audit
+              </button>
+
+              <button onClick={downloadAuditPdf} className={buttonOutline}>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF Audit
+              </button>
+            </>
           ) : null}
         </div>
       </div>
