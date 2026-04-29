@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   ArrowDownCircle,
   AlertTriangle,
+  Calendar,
   Users,
   Landmark,
   Receipt,
@@ -34,6 +35,64 @@ function safePercent(value, max) {
   if (total <= 0) return 0;
 
   return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
+}
+
+
+function isWithinDateRange(dateValue, startDate, endDate) {
+  if (!startDate && !endDate) return true;
+  if (!dateValue) return false;
+
+  const normalizedDate = String(dateValue).slice(0, 10);
+
+  if (startDate && normalizedDate < startDate) return false;
+  if (endDate && normalizedDate > endDate) return false;
+
+  return true;
+}
+
+function formatDisplayDate(dateValue) {
+  if (!dateValue) return "";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${dateValue}T00:00:00`));
+}
+
+function buildPeriodLabel(startDate, endDate) {
+  if (startDate && endDate) {
+    return `${formatDisplayDate(startDate)} sampai ${formatDisplayDate(endDate)}`;
+  }
+
+  if (startDate) return `Mulai ${formatDisplayDate(startDate)}`;
+  if (endDate) return `Sampai ${formatDisplayDate(endDate)}`;
+
+  return "Semua tanggal";
+}
+
+function sumNominal(rows) {
+  return rows.reduce((sum, row) => sum + Number(row?.nominal || 0), 0);
+}
+
+function sumVendorPaymentAmount(rows) {
+  return rows.reduce(
+    (sum, row) => sum + Number(row?.nominal || 0) + Number(row?.biayaAdmin || 0),
+    0
+  );
+}
+
+function hasParticipantProof(payment) {
+  return Boolean(payment?.buktiDataUrl || payment?.buktiPath || payment?.buktiUrl);
+}
+
+function hasVendorProof(payment) {
+  return Boolean(
+    payment?.buktiPath ||
+      payment?.buktiDataUrl ||
+      payment?.buktiUrl ||
+      payment?.buktiNama
+  );
 }
 
 function DashboardMetric({ label, value, helper, tone = "slate" }) {
@@ -174,6 +233,8 @@ export default function HomePage({ app }) {
     config,
     canEdit,
     otherIncomes,
+    participantPaymentHistory = [],
+    vendorPaymentRows = [],
     expenseRows,
     totalIuranTarget,
     totalIuranMasuk,
@@ -205,10 +266,148 @@ export default function HomePage({ app }) {
     importInputRef,
   } = app;
 
-  const iuranPercent = safePercent(totalIuranMasuk, totalIuranTarget);
-  const vendorPercent = safePercent(totalLinkedVendorPaid, totalTagihan);
-  const isDeficit = proyeksiSaldoAkhir < 0;
-  const activeWarnings = Array.isArray(warnings) ? warnings : [];
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+
+  const hasDateFilter = Boolean(filterStartDate || filterEndDate);
+  const periodLabel = buildPeriodLabel(filterStartDate, filterEndDate);
+
+  const filteredParticipantPayments = (Array.isArray(participantPaymentHistory)
+    ? participantPaymentHistory
+    : []
+  ).filter((payment) =>
+    isWithinDateRange(payment?.tanggal, filterStartDate, filterEndDate)
+  );
+
+  const filteredOtherIncomes = (Array.isArray(otherIncomes) ? otherIncomes : []).filter(
+    (income) => isWithinDateRange(income?.tanggal, filterStartDate, filterEndDate)
+  );
+
+  const filteredVendorPayments = (Array.isArray(vendorPaymentRows)
+    ? vendorPaymentRows
+    : []
+  ).filter((payment) =>
+    isWithinDateRange(payment?.tanggal, filterStartDate, filterEndDate)
+  );
+
+  const filteredExpenseRows = (Array.isArray(expenseRows) ? expenseRows : []).filter(
+    (expense) => isWithinDateRange(expense?.jatuhTempo, filterStartDate, filterEndDate)
+  );
+
+  const periodIuranMasuk = sumNominal(filteredParticipantPayments);
+  const periodOtherIncome = sumNominal(filteredOtherIncomes);
+  const periodTotalPemasukan = periodIuranMasuk + periodOtherIncome;
+  const periodVendorPaid = sumNominal(filteredVendorPayments);
+  const periodVendorAdmin = filteredVendorPayments.reduce(
+    (sum, payment) => sum + Number(payment?.biayaAdmin || 0),
+    0
+  );
+  const periodArusKeluarVendor = sumVendorPaymentAmount(filteredVendorPayments);
+  const periodTotalTagihan = sumNominal(filteredExpenseRows);
+  const periodVendorOutstanding = Math.max(
+    periodTotalTagihan - periodArusKeluarVendor,
+    0
+  );
+  const periodSaldoKas = periodTotalPemasukan - periodArusKeluarVendor;
+  const periodProyeksiSaldoAkhir =
+    periodTotalPemasukan - periodTotalTagihan - periodVendorAdmin;
+
+  const periodParticipantWithoutProof = filteredParticipantPayments.filter(
+    (payment) => !hasParticipantProof(payment)
+  );
+  const periodVendorWithoutProof = filteredVendorPayments.filter(
+    (payment) => !hasVendorProof(payment)
+  );
+  const periodMissingProofCount =
+    periodParticipantWithoutProof.length + periodVendorWithoutProof.length;
+  const periodMissingProofAmount =
+    sumNominal(periodParticipantWithoutProof) + sumNominal(periodVendorWithoutProof);
+
+  const activeTotalIuranMasuk = hasDateFilter ? periodIuranMasuk : totalIuranMasuk;
+  const activeTotalOtherIncome = hasDateFilter ? periodOtherIncome : totalOtherIncome;
+  const activeTotalPemasukan = hasDateFilter
+    ? periodTotalPemasukan
+    : totalPemasukan;
+  const activeTotalVendorAdmin = hasDateFilter
+    ? periodVendorAdmin
+    : totalVendorAdmin;
+  const activeTotalArusKeluarVendor = hasDateFilter
+    ? periodArusKeluarVendor
+    : totalArusKeluarVendor;
+  const activeTotalTagihan = hasDateFilter ? periodTotalTagihan : totalTagihan;
+  const activeLinkedVendorPaid = hasDateFilter ? periodVendorPaid : totalLinkedVendorPaid;
+  const activeVendorOutstanding = hasDateFilter
+    ? periodVendorOutstanding
+    : totalVendorOutstanding;
+  const activeSaldoKas = hasDateFilter ? periodSaldoKas : saldoKasSaatIni;
+  const activeProyeksiSaldoAkhir = hasDateFilter
+    ? periodProyeksiSaldoAkhir
+    : proyeksiSaldoAkhir;
+
+  const iuranPercent = safePercent(activeTotalIuranMasuk, totalIuranTarget);
+  const vendorPercent = safePercent(activeLinkedVendorPaid, activeTotalTagihan);
+  const isDeficit = activeProyeksiSaldoAkhir < 0;
+
+  const activeFinanceHealth = hasDateFilter
+    ? isDeficit
+      ? {
+          tone: "rose",
+          title: "Periode defisit",
+          text: `Pada periode ${periodLabel}, proyeksi saldo masih kurang ${formatRupiah(
+            Math.abs(activeProyeksiSaldoAkhir)
+          )}.`,
+        }
+      : activeVendorOutstanding > 0 || periodMissingProofCount > 0
+        ? {
+            tone: "amber",
+            title: "Periode perlu perhatian",
+            text: `Pada periode ${periodLabel}, ada sisa tagihan vendor ${formatRupiah(
+              activeVendorOutstanding
+            )} dan ${periodMissingProofCount} transaksi tanpa bukti.`,
+          }
+        : {
+            tone: "emerald",
+            title: "Periode aman",
+            text: `Pada periode ${periodLabel}, saldo periode positif dan bukti transaksi utama terkendali.`,
+          }
+    : financeHealth;
+
+  const globalWarnings = Array.isArray(warnings) ? warnings : [];
+  const activeWarnings = hasDateFilter
+    ? [
+        ...(periodMissingProofCount > 0
+          ? [
+              `Pada periode ${periodLabel}, ada ${periodMissingProofCount} transaksi tanpa bukti dengan nominal ${formatRupiah(
+                periodMissingProofAmount
+              )}.`,
+            ]
+          : []),
+        ...(activeVendorOutstanding > 0
+          ? [
+              `Pada periode ${periodLabel}, sisa tagihan vendor periode sebesar ${formatRupiah(
+                activeVendorOutstanding
+              )}.`,
+            ]
+          : []),
+        ...(activeProyeksiSaldoAkhir < 0
+          ? [
+              `Pada periode ${periodLabel}, proyeksi saldo periode masih kurang ${formatRupiah(
+                Math.abs(activeProyeksiSaldoAkhir)
+              )}.`,
+            ]
+          : []),
+        ...(periodMissingProofCount === 0 &&
+        activeVendorOutstanding <= 0 &&
+        activeProyeksiSaldoAkhir >= 0
+          ? []
+          : []),
+      ]
+    : globalWarnings;
+
+  const resetDateFilter = () => {
+    setFilterStartDate("");
+    setFilterEndDate("");
+  };
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -230,29 +429,29 @@ export default function HomePage({ app }) {
 
             <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               <DashboardMetric
-                label="Saldo kas saat ini"
-                value={formatRupiah(saldoKasSaatIni)}
-                helper="Pemasukan dikurangi arus keluar"
-                tone={saldoKasSaatIni >= 0 ? "emerald" : "rose"}
+                label={hasDateFilter ? "Saldo kas periode" : "Saldo kas saat ini"}
+                value={formatRupiah(activeSaldoKas)}
+                helper={hasDateFilter ? `Periode: ${periodLabel}` : "Pemasukan dikurangi arus keluar"}
+                tone={activeSaldoKas >= 0 ? "emerald" : "rose"}
               />
 
               <DashboardMetric
-                label="Total pemasukan"
-                value={formatRupiah(totalPemasukan)}
-                helper="Iuran santri + pemasukan lain"
+                label={hasDateFilter ? "Pemasukan periode" : "Total pemasukan"}
+                value={formatRupiah(activeTotalPemasukan)}
+                helper={hasDateFilter ? "Iuran + pemasukan lain dalam periode" : "Iuran santri + pemasukan lain"}
                 tone="sky"
               />
 
               <DashboardMetric
-                label="Arus keluar vendor"
-                value={formatRupiah(totalArusKeluarVendor)}
-                helper={`Termasuk admin ${formatRupiah(totalVendorAdmin)}`}
+                label={hasDateFilter ? "Arus keluar vendor periode" : "Arus keluar vendor"}
+                value={formatRupiah(activeTotalArusKeluarVendor)}
+                helper={`Termasuk admin ${formatRupiah(activeTotalVendorAdmin)}`}
                 tone="amber"
               />
 
               <DashboardMetric
-                label="Proyeksi saldo akhir"
-                value={formatRupiah(proyeksiSaldoAkhir)}
+                label={hasDateFilter ? "Proyeksi saldo periode" : "Proyeksi saldo akhir"}
+                value={formatRupiah(activeProyeksiSaldoAkhir)}
                 helper={
                   isDeficit
                     ? "Perlu perhatian karena proyeksi defisit"
@@ -273,13 +472,13 @@ export default function HomePage({ app }) {
                   Status keuangan hari ini
                 </p>
                 <p className="mt-1 text-2xl font-extrabold text-slate-900">
-                  {financeHealth.title}
+                  {activeFinanceHealth.title}
                 </p>
               </div>
             </div>
 
             <p className="mt-4 text-sm leading-7 text-slate-600">
-              {financeHealth.text}
+              {activeFinanceHealth.text}
             </p>
 
             <div className="mt-5 grid gap-3">
@@ -291,7 +490,7 @@ export default function HomePage({ app }) {
                   <p className="font-bold text-slate-900">{iuranPercent}%</p>
                 </div>
                 <div className="mt-3">
-                  <ProgressBar value={totalIuranMasuk} max={totalIuranTarget} />
+                  <ProgressBar value={activeTotalIuranMasuk} max={totalIuranTarget} />
                 </div>
               </div>
 
@@ -303,7 +502,7 @@ export default function HomePage({ app }) {
                   <p className="font-bold text-slate-900">{vendorPercent}%</p>
                 </div>
                 <div className="mt-3">
-                  <ProgressBar value={totalLinkedVendorPaid} max={totalTagihan} />
+                  <ProgressBar value={activeLinkedVendorPaid} max={activeTotalTagihan} />
                 </div>
               </div>
             </div>
@@ -320,6 +519,80 @@ export default function HomePage({ app }) {
             </div>
           </div>
         </div>
+      </div>
+
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Calendar className="h-4 w-4 text-slate-500" />
+              Filter periode dashboard
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Periode aktif: <span className="font-semibold text-slate-700">{periodLabel}</span>
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <label className="text-sm font-medium text-slate-700">
+              Tanggal awal
+              <input
+                type="date"
+                value={filterStartDate}
+                max={filterEndDate || undefined}
+                onChange={(event) => setFilterStartDate(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Tanggal akhir
+              <input
+                type="date"
+                value={filterEndDate}
+                min={filterStartDate || undefined}
+                onChange={(event) => setFilterEndDate(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={resetDateFilter}
+              className={buttonOutline}
+              disabled={!hasDateFilter}
+            >
+              Reset filter
+            </button>
+          </div>
+        </div>
+
+        {hasDateFilter ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MiniStat
+              label="Iuran masuk periode"
+              value={formatRupiah(periodIuranMasuk)}
+              tone="emerald"
+            />
+            <MiniStat
+              label="Vendor keluar periode"
+              value={formatRupiah(periodArusKeluarVendor)}
+              tone="amber"
+            />
+            <MiniStat
+              label="Saldo periode"
+              value={formatRupiah(periodSaldoKas)}
+              tone={periodSaldoKas >= 0 ? "sky" : "rose"}
+            />
+            <MiniStat
+              label="Transaksi tanpa bukti"
+              value={`${periodMissingProofCount} transaksi`}
+              helper={formatRupiah(periodMissingProofAmount)}
+              tone={periodMissingProofCount > 0 ? "rose" : "emerald"}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.55fr)]">
@@ -340,7 +613,7 @@ export default function HomePage({ app }) {
                   key={`${warning}-${index}`}
                   title={`Prioritas ${index + 1}`}
                   text={warning}
-                  tone={index === 0 ? financeHealth.tone : "amber"}
+                  tone={index === 0 ? activeFinanceHealth.tone : "amber"}
                 />
               ))
             )}
@@ -399,23 +672,23 @@ export default function HomePage({ app }) {
         <ProgressPanel
           title="Progress Iuran Santri"
           subtitle={`${jumlahSantri} santri terdaftar · ${jumlahLunas} lunas · ${jumlahCicilan} cicilan · ${jumlahBelumBayar} belum bayar`}
-          value={totalIuranMasuk}
+          value={activeTotalIuranMasuk}
           max={totalIuranTarget}
           percentLabel={`${iuranPercent}%`}
-          leftLabel="Iuran masuk"
-          rightLabel="Target iuran"
+          leftLabel={hasDateFilter ? "Iuran masuk periode" : "Iuran masuk"}
+          rightLabel="Target iuran total kegiatan"
           tone={totalIuranOutstanding > 0 ? "amber" : "emerald"}
         />
 
         <ProgressPanel
           title="Progress Pembayaran Vendor"
-          subtitle={`${expenseRows.length} tagihan vendor tercatat · sisa tagihan ${formatRupiah(totalVendorOutstanding)}`}
-          value={totalLinkedVendorPaid}
-          max={totalTagihan}
+          subtitle={`${hasDateFilter ? filteredExpenseRows.length : expenseRows.length} tagihan vendor tercatat · sisa tagihan ${formatRupiah(activeVendorOutstanding)}`}
+          value={activeLinkedVendorPaid}
+          max={activeTotalTagihan}
           percentLabel={`${vendorPercent}%`}
-          leftLabel="Sudah dibayar"
-          rightLabel="Total tagihan"
-          tone={totalVendorOutstanding > 0 ? "rose" : "emerald"}
+          leftLabel={hasDateFilter ? "Dibayar periode" : "Sudah dibayar"}
+          rightLabel={hasDateFilter ? "Tagihan jatuh tempo periode" : "Total tagihan"}
+          tone={activeVendorOutstanding > 0 ? "rose" : "emerald"}
         />
       </div>
 
@@ -434,34 +707,34 @@ export default function HomePage({ app }) {
 
           <StatCard
             icon={<ArrowDownCircle className="h-5 w-5 text-emerald-700" />}
-            label="Iuran sudah masuk"
-            value={formatRupiah(totalIuranMasuk)}
+            label={hasDateFilter ? "Iuran masuk periode" : "Iuran sudah masuk"}
+            value={formatRupiah(activeTotalIuranMasuk)}
             tone="bg-emerald-100"
             helper={`${jumlahLunas} santri sudah lunas`}
           />
 
           <StatCard
             icon={<Receipt className="h-5 w-5 text-amber-700" />}
-            label="Total tagihan vendor"
-            value={formatRupiah(totalTagihan)}
+            label={hasDateFilter ? "Tagihan vendor periode" : "Total tagihan vendor"}
+            value={formatRupiah(activeTotalTagihan)}
             tone="bg-amber-100"
-            helper={`${expenseRows.length} tagihan tercatat`}
+            helper={`${hasDateFilter ? filteredExpenseRows.length : expenseRows.length} tagihan tercatat`}
           />
 
           <StatCard
             icon={<Wallet className="h-5 w-5 text-rose-700" />}
-            label="Arus keluar vendor"
-            value={formatRupiah(totalArusKeluarVendor)}
+            label={hasDateFilter ? "Arus keluar vendor periode" : "Arus keluar vendor"}
+            value={formatRupiah(activeTotalArusKeluarVendor)}
             tone="bg-rose-100"
-            helper={`Termasuk admin ${formatRupiah(totalVendorAdmin)}`}
+            helper={`Termasuk admin ${formatRupiah(activeTotalVendorAdmin)}`}
           />
 
           <StatCard
             icon={<Landmark className="h-5 w-5 text-violet-700" />}
-            label="Pemasukan lain"
-            value={formatRupiah(totalOtherIncome)}
+            label={hasDateFilter ? "Pemasukan lain periode" : "Pemasukan lain"}
+            value={formatRupiah(activeTotalOtherIncome)}
             tone="bg-violet-100"
-            helper={`${otherIncomes.length} transaksi lain`}
+            helper={`${hasDateFilter ? filteredOtherIncomes.length : otherIncomes.length} transaksi lain`}
           />
 
           <StatCard
@@ -539,19 +812,19 @@ export default function HomePage({ app }) {
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <MiniStat
-                label="Total tagihan"
-                value={formatRupiah(totalTagihan)}
+                label={hasDateFilter ? "Tagihan periode" : "Total tagihan"}
+                value={formatRupiah(activeTotalTagihan)}
                 tone="amber"
               />
               <MiniStat
-                label="Sudah dibayar"
-                value={formatRupiah(totalLinkedVendorPaid)}
+                label={hasDateFilter ? "Dibayar periode" : "Sudah dibayar"}
+                value={formatRupiah(activeLinkedVendorPaid)}
                 tone="emerald"
               />
               <MiniStat
-                label="Sisa"
-                value={formatRupiah(totalVendorOutstanding)}
-                tone={totalVendorOutstanding > 0 ? "rose" : "emerald"}
+                label={hasDateFilter ? "Sisa periode" : "Sisa"}
+                value={formatRupiah(activeVendorOutstanding)}
+                tone={activeVendorOutstanding > 0 ? "rose" : "emerald"}
               />
             </div>
 
