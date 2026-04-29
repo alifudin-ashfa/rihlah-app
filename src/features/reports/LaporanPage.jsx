@@ -42,7 +42,7 @@ const PrintStyles = () => (
     @media print {
       @page {
         size: A4;
-        margin: 14mm 12mm;
+        margin: 12mm 10mm;
       }
 
       html,
@@ -80,10 +80,13 @@ const PrintStyles = () => (
       }
 
       .print-section {
-        break-inside: avoid;
-        page-break-inside: avoid;
         box-shadow: none !important;
         border: 1px solid #cbd5e1 !important;
+      }
+
+      .print-section:not(.print-audit-section) {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
 
       .print-audit-section {
@@ -91,7 +94,12 @@ const PrintStyles = () => (
         page-break-inside: auto !important;
       }
 
-      .print-card,
+      .print-card {
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+        box-shadow: none !important;
+      }
+
       .print-row {
         break-inside: avoid;
         page-break-inside: avoid;
@@ -101,12 +109,18 @@ const PrintStyles = () => (
       .print-grid-2 {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 10px !important;
+        gap: 8px !important;
       }
 
       .print-grid-4 {
         display: grid !important;
         grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+      }
+
+      .print-audit-detail-grid {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) !important;
         gap: 10px !important;
       }
 
@@ -116,66 +130,76 @@ const PrintStyles = () => (
       }
 
       .print-compact * {
-        line-height: 1.35 !important;
+        line-height: 1.22 !important;
       }
 
       .print-compact .rounded-3xl,
       .print-compact .rounded-2xl,
       .print-compact .rounded-xl {
-        border-radius: 10px !important;
+        border-radius: 8px !important;
       }
 
       .print-compact .p-6,
-      .print-compact .sm\\:p-6,
+      .print-compact .sm\:p-6,
       .print-compact .p-5 {
-        padding: 14px !important;
-      }
-
-      .print-compact .p-4 {
         padding: 10px !important;
       }
 
+      .print-compact .p-4 {
+        padding: 8px !important;
+      }
+
       .print-compact .mt-6 {
-        margin-top: 14px !important;
+        margin-top: 10px !important;
       }
 
       .print-compact .mt-5,
       .print-compact .mt-4,
       .print-compact .space-y-5 > :not([hidden]) ~ :not([hidden]),
       .print-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) {
-        margin-top: 10px !important;
+        margin-top: 8px !important;
       }
 
       .print-compact .text-lg {
-        font-size: 14px !important;
+        font-size: 13px !important;
       }
 
       .print-compact .text-sm {
-        font-size: 11px !important;
+        font-size: 10px !important;
       }
 
       .print-compact .text-xs {
-        font-size: 10px !important;
+        font-size: 9px !important;
       }
-    }
-
 
       .print-table-wrap {
         display: block !important;
-        margin-top: 12px !important;
+        margin-top: 8px !important;
+        width: 100% !important;
+        overflow: visible !important;
       }
 
       .print-table {
         display: table !important;
         width: 100% !important;
+        table-layout: fixed !important;
         border-collapse: collapse !important;
-        font-size: 10px !important;
+        font-size: 8.5px !important;
+      }
+
+      .print-table thead {
+        display: table-header-group !important;
+      }
+
+      .print-table tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
 
       .print-table th,
       .print-table td {
         border: 1px solid #cbd5e1 !important;
-        padding: 6px 7px !important;
+        padding: 4px 5px !important;
         text-align: left !important;
         vertical-align: top !important;
       }
@@ -184,22 +208,65 @@ const PrintStyles = () => (
         background: #f1f5f9 !important;
         color: #334155 !important;
         font-weight: 800 !important;
+        white-space: nowrap !important;
       }
 
-      .print-table td:last-child,
-      .print-table th:last-child {
-        text-align: right !important;
+      .print-table .cell-name {
+        font-weight: 800 !important;
+        color: #0f172a !important;
+        word-break: normal !important;
+        overflow-wrap: anywhere !important;
       }
+
+      .print-table .cell-class,
+      .print-table .cell-date,
+      .print-table .cell-method,
+      .print-table .cell-type {
+        white-space: nowrap !important;
+      }
+
+      .print-table .cell-note {
+        color: #475569 !important;
+        overflow-wrap: anywhere !important;
+      }
+
+      .print-table .cell-amount {
+        text-align: right !important;
+        white-space: nowrap !important;
+        font-weight: 800 !important;
+        color: #0f172a !important;
+      }
+
+      .audit-participant-table col:nth-child(1) { width: 34%; }
+      .audit-participant-table col:nth-child(2) { width: 7%; }
+      .audit-participant-table col:nth-child(3) { width: 13%; }
+      .audit-participant-table col:nth-child(4) { width: 12%; }
+      .audit-participant-table col:nth-child(5) { width: 18%; }
+      .audit-participant-table col:nth-child(6) { width: 16%; }
+
+      .audit-vendor-table {
+        font-size: 8px !important;
+      }
+
+      .audit-vendor-table col:nth-child(1) { width: 18%; }
+      .audit-vendor-table col:nth-child(2) { width: 19%; }
+      .audit-vendor-table col:nth-child(3) { width: 11%; }
+      .audit-vendor-table col:nth-child(4) { width: 10%; }
+      .audit-vendor-table col:nth-child(5) { width: 10%; }
+      .audit-vendor-table col:nth-child(6) { width: 13%; }
+      .audit-vendor-table col:nth-child(7) { width: 10%; }
+      .audit-vendor-table col:nth-child(8) { width: 9%; }
 
       .print-table-empty {
-        margin-top: 12px !important;
+        margin-top: 8px !important;
         border: 1px solid #cbd5e1 !important;
-        border-radius: 10px !important;
-        padding: 10px !important;
+        border-radius: 8px !important;
+        padding: 8px !important;
         color: #475569 !important;
         background: #f8fafc !important;
-        font-size: 11px !important;
+        font-size: 10px !important;
       }
+    }
 
     @media screen {
       .print-only {
@@ -627,7 +694,7 @@ export default function LaporanPage({ app }) {
               />
             )}
 
-            <div className="grid gap-5 2xl:grid-cols-2 print-grid-2">
+            <div className="grid gap-5 2xl:grid-cols-2 print-audit-detail-grid">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
                 <div className="flex items-start gap-3">
                   <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
@@ -649,7 +716,15 @@ export default function LaporanPage({ app }) {
                       Semua transaksi iuran sudah memiliki bukti.
                     </div>
                   ) : (
-                    <table className="print-table">
+                    <table className="print-table audit-participant-table">
+                      <colgroup>
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Nama santri</th>
@@ -663,12 +738,18 @@ export default function LaporanPage({ app }) {
                       <tbody>
                         {participantWithoutProof.map((payment) => (
                           <tr key={`print-${payment.id}`}>
-                            <td>{payment.participantName || "Santri tidak diketahui"}</td>
-                            <td>{payment.participantClass || "Tanpa kelas"}</td>
-                            <td>{payment.tanggal || "-"}</td>
-                            <td>{payment.metode || "-"}</td>
-                            <td>{payment.catatan || "-"}</td>
-                            <td>{formatRupiah(payment.nominal)}</td>
+                            <td className="cell-name">
+                              {payment.participantName || "Santri tidak diketahui"}
+                            </td>
+                            <td className="cell-class">
+                              {payment.participantClass || "Tanpa kelas"}
+                            </td>
+                            <td className="cell-date">{payment.tanggal || "-"}</td>
+                            <td className="cell-method">{payment.metode || "-"}</td>
+                            <td className="cell-note">{payment.catatan || "-"}</td>
+                            <td className="cell-amount">
+                              {formatRupiah(payment.nominal)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -738,7 +819,17 @@ export default function LaporanPage({ app }) {
                       Semua pembayaran vendor sudah memiliki bukti.
                     </div>
                   ) : (
-                    <table className="print-table">
+                    <table className="print-table audit-vendor-table">
+                      <colgroup>
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                        <col />
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Vendor</th>
@@ -763,14 +854,16 @@ export default function LaporanPage({ app }) {
 
                           return (
                             <tr key={`print-${payment.id}`}>
-                              <td>{vendorName}</td>
-                              <td>{expenseName}</td>
-                              <td>{payment.tanggal || "-"}</td>
-                              <td>{payment.metode || "-"}</td>
-                              <td>{payment.jenis || "-"}</td>
-                              <td>{payment.akunTujuan || "-"}</td>
-                              <td>{payment.catatan || "-"}</td>
-                              <td>{formatRupiah(payment.nominal)}</td>
+                              <td className="cell-name">{vendorName}</td>
+                              <td className="cell-note">{expenseName}</td>
+                              <td className="cell-date">{payment.tanggal || "-"}</td>
+                              <td className="cell-method">{payment.metode || "-"}</td>
+                              <td className="cell-type">{payment.jenis || "-"}</td>
+                              <td className="cell-note">{payment.akunTujuan || "-"}</td>
+                              <td className="cell-note">{payment.catatan || "-"}</td>
+                              <td className="cell-amount">
+                                {formatRupiah(payment.nominal)}
+                              </td>
                             </tr>
                           );
                         })}
