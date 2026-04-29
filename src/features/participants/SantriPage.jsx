@@ -38,9 +38,19 @@ import {
   ProgressBar,
   tabClass,
 } from "../../shared/lib/rihlahCore";
+import { exportOutstandingParticipantsExcel } from "../../shared/lib/exportExcel";
+import { exportOutstandingParticipantsPdf } from "../../shared/lib/exportPdf";
 
 const hasPaymentProof = (payment) =>
   Boolean(payment?.buktiDataUrl || payment?.buktiPath || payment?.buktiUrl);
+
+function formatFileDate() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function SantriPage({ app }) {
   const {
@@ -187,6 +197,54 @@ export default function SantriPage({ app }) {
     return rows;
   }, [participantPaymentHistory, paymentProofFilter]);
 
+  const outstandingParticipants = useMemo(
+    () =>
+      (Array.isArray(participantRows) ? participantRows : [])
+        .filter((item) => Number(item.remaining || 0) > 0 || item.status !== "Lunas")
+        .sort((a, b) => {
+          const remainingA = Number(a.remaining || 0);
+          const remainingB = Number(b.remaining || 0);
+          if (remainingA !== remainingB) return remainingB - remainingA;
+          return String(a.nama || "").localeCompare(String(b.nama || ""));
+        }),
+    [participantRows]
+  );
+
+  const outstandingSummary = useMemo(
+    () => ({
+      count: outstandingParticipants.length,
+      totalTarget: outstandingParticipants.reduce(
+        (sum, item) => sum + Number(item.targetIuran || 0),
+        0
+      ),
+      totalPaid: outstandingParticipants.reduce(
+        (sum, item) => sum + Number(item.totalPaid || 0),
+        0
+      ),
+      totalRemaining: outstandingParticipants.reduce(
+        (sum, item) => sum + Number(item.remaining || 0),
+        0
+      ),
+    }),
+    [outstandingParticipants]
+  );
+
+  const handleExportOutstandingExcel = () => {
+    exportOutstandingParticipantsExcel({
+      rows: outstandingParticipants,
+      summary: outstandingSummary,
+      fileName: `santri-belum-lunas-rihlah-${formatFileDate()}.xlsx`,
+    });
+  };
+
+  const handleExportOutstandingPdf = () => {
+    exportOutstandingParticipantsPdf({
+      rows: outstandingParticipants,
+      summary: outstandingSummary,
+      fileName: `santri-belum-lunas-rihlah-${formatFileDate()}.pdf`,
+    });
+  };
+
   const handleParticipantProofUpload = async (event) => {
     const file = event.target.files?.[0];
 
@@ -332,6 +390,59 @@ export default function SantriPage({ app }) {
                   {status}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Export Santri Belum Lunas
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Gunakan daftar ini untuk follow-up pembayaran sebelum Rihlah 6–7 Mei 2026.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                <button
+                  type="button"
+                  onClick={handleExportOutstandingExcel}
+                  disabled={outstandingParticipants.length === 0}
+                  className={buttonOutline}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export Excel Belum Lunas
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportOutstandingPdf}
+                  disabled={outstandingParticipants.length === 0}
+                  className={buttonOutline}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export PDF Belum Lunas
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <MiniStat
+                label="Santri belum lunas"
+                value={`${outstandingSummary.count} santri`}
+                tone={outstandingSummary.count > 0 ? "rose" : "emerald"}
+              />
+              <MiniStat
+                label="Sudah dibayar"
+                value={formatRupiah(outstandingSummary.totalPaid)}
+                tone="emerald"
+              />
+              <MiniStat
+                label="Sisa tagihan"
+                value={formatRupiah(outstandingSummary.totalRemaining)}
+                tone={outstandingSummary.totalRemaining > 0 ? "amber" : "emerald"}
+              />
             </div>
           </div>
 

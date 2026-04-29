@@ -79,3 +79,53 @@ export function exportCashbookExcel({
 
   XLSX.writeFile(workbook, fileName);
 }
+
+function formatFileDate() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+export function exportOutstandingParticipantsExcel({
+  rows = [],
+  summary = {},
+  fileName = `santri-belum-lunas-rihlah-${formatFileDate()}.xlsx`,
+} = {}) {
+  const workbook = XLSX.utils.book_new();
+
+  const summarySheet = XLSX.utils.aoa_to_sheet([
+    ["Daftar Santri Belum Lunas Rihlah Al-Yaqut"],
+    ["Dicetak", new Date().toLocaleString("id-ID")],
+    [],
+    ["Item", "Nilai"],
+    ["Total Santri Belum Lunas", Number(summary.count || rows.length || 0)],
+    ["Total Target Iuran", Number(summary.totalTarget || 0)],
+    ["Total Sudah Bayar", Number(summary.totalPaid || 0)],
+    ["Total Sisa Tagihan", Number(summary.totalRemaining || 0)],
+  ]);
+
+  setColumnWidths(summarySheet, [30, 28]);
+  XLSX.utils.book_append_sheet(workbook, summarySheet, "Ringkasan");
+
+  const participantRows = rows.map((row, index) => ({
+    No: index + 1,
+    "Nama Santri": safeText(row.nama),
+    Kelas: safeText(row.kelas, "Tanpa kelas"),
+    Kamar: safeText(row.kamar, "Tanpa kamar"),
+    "Target Iuran": Number(row.targetIuran || 0),
+    "Sudah Bayar": Number(row.totalPaid || 0),
+    "Sisa Tagihan": Number(row.remaining || 0),
+    Status: safeText(row.status),
+    "Pembayaran Terakhir": safeText(row.lastPaymentDate),
+    Catatan: safeText(row.catatan),
+  }));
+
+  const participantSheet = XLSX.utils.json_to_sheet(participantRows);
+  setColumnWidths(participantSheet, [6, 32, 14, 16, 16, 16, 16, 16, 20, 34]);
+  XLSX.utils.book_append_sheet(workbook, participantSheet, "Santri Belum Lunas");
+
+  XLSX.writeFile(workbook, fileName);
+}

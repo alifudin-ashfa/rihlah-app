@@ -100,3 +100,92 @@ export function exportCashbookPdf({
 
   doc.save(fileName);
 }
+
+function formatFileDate() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+export function exportOutstandingParticipantsPdf({
+  rows = [],
+  summary = {},
+  fileName = `santri-belum-lunas-rihlah-${formatFileDate()}.pdf`,
+} = {}) {
+  const doc = new jsPDF({
+    orientation: "landscape",
+  });
+
+  doc.setFontSize(16);
+  doc.text("Daftar Santri Belum Lunas Rihlah Al-Yaqut", 14, 16);
+
+  doc.setFontSize(10);
+  doc.text(`Dicetak: ${new Date().toLocaleString("id-ID")}`, 14, 24);
+
+  autoTable(doc, {
+    startY: 32,
+    head: [["Ringkasan", "Nilai"]],
+    body: [
+      ["Total Santri Belum Lunas", `${summary.count || rows.length || 0} santri`],
+      ["Total Target Iuran", formatRupiah(summary.totalTarget || 0)],
+      ["Total Sudah Bayar", formatRupiah(summary.totalPaid || 0)],
+      ["Total Sisa Tagihan", formatRupiah(summary.totalRemaining || 0)],
+    ],
+    styles: {
+      fontSize: 9,
+      cellPadding: 2,
+    },
+  });
+
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 8,
+    head: [
+      [
+        "No",
+        "Nama Santri",
+        "Kelas",
+        "Kamar",
+        "Target Iuran",
+        "Sudah Bayar",
+        "Sisa Tagihan",
+        "Status",
+        "Catatan",
+      ],
+    ],
+    body: rows.map((row, index) => [
+      index + 1,
+      row.nama || "-",
+      row.kelas || "-",
+      row.kamar || "-",
+      formatRupiah(row.targetIuran || 0),
+      formatRupiah(row.totalPaid || 0),
+      formatRupiah(row.remaining || 0),
+      row.status || "-",
+      row.catatan || "-",
+    ]),
+    styles: {
+      fontSize: 7,
+      cellPadding: 2,
+      overflow: "linebreak",
+    },
+    headStyles: {
+      fontSize: 7,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 50 },
+      2: { cellWidth: 18 },
+      3: { cellWidth: 22 },
+      4: { cellWidth: 28, halign: "right" },
+      5: { cellWidth: 28, halign: "right" },
+      6: { cellWidth: 28, halign: "right" },
+      7: { cellWidth: 24 },
+      8: { cellWidth: 56 },
+    },
+  });
+
+  doc.save(fileName);
+}
