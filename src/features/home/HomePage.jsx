@@ -429,9 +429,13 @@ export default function HomePage({ app }) {
 
             <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               <DashboardMetric
-                label={hasDateFilter ? "Saldo kas periode" : "Saldo kas saat ini"}
+                label={hasDateFilter ? "Saldo kas aktual periode" : "Saldo kas saat ini"}
                 value={formatRupiah(activeSaldoKas)}
-                helper={hasDateFilter ? `Periode: ${periodLabel}` : "Pemasukan dikurangi arus keluar"}
+                helper={
+                  hasDateFilter
+                    ? "Pemasukan periode dikurangi pembayaran vendor periode"
+                    : "Pemasukan dikurangi arus keluar"
+                }
                 tone={activeSaldoKas >= 0 ? "emerald" : "rose"}
               />
 
@@ -450,12 +454,14 @@ export default function HomePage({ app }) {
               />
 
               <DashboardMetric
-                label={hasDateFilter ? "Proyeksi saldo periode" : "Proyeksi saldo akhir"}
+                label={hasDateFilter ? "Proyeksi saldo rencana periode" : "Proyeksi saldo akhir"}
                 value={formatRupiah(activeProyeksiSaldoAkhir)}
                 helper={
-                  isDeficit
-                    ? "Perlu perhatian karena proyeksi defisit"
-                    : "Masih positif berdasarkan data saat ini"
+                  hasDateFilter
+                    ? "Pemasukan periode dikurangi tagihan jatuh tempo periode dan admin vendor"
+                    : isDeficit
+                      ? "Perlu perhatian karena proyeksi defisit"
+                      : "Masih positif berdasarkan data saat ini"
                 }
                 tone={isDeficit ? "rose" : "emerald"}
               />
@@ -469,7 +475,7 @@ export default function HomePage({ app }) {
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-500">
-                  Status keuangan hari ini
+                  {hasDateFilter ? "Status keuangan periode" : "Status keuangan hari ini"}
                 </p>
                 <p className="mt-1 text-2xl font-extrabold text-slate-900">
                   {activeFinanceHealth.title}
@@ -497,7 +503,7 @@ export default function HomePage({ app }) {
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-600">
-                    Progress vendor
+                    {hasDateFilter ? "Progress vendor periode" : "Progress vendor"}
                   </p>
                   <p className="font-bold text-slate-900">{vendorPercent}%</p>
                 </div>
@@ -569,27 +575,36 @@ export default function HomePage({ app }) {
         </div>
 
         {hasDateFilter ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MiniStat
-              label="Iuran masuk periode"
-              value={formatRupiah(periodIuranMasuk)}
-              tone="emerald"
-            />
-            <MiniStat
-              label="Vendor keluar periode"
-              value={formatRupiah(periodArusKeluarVendor)}
-              tone="amber"
-            />
-            <MiniStat
-              label="Saldo periode"
-              value={formatRupiah(periodSaldoKas)}
-              tone={periodSaldoKas >= 0 ? "sky" : "rose"}
-            />
-            <MiniStat
-              label="Transaksi tanpa bukti"
-              value={`${periodMissingProofCount} transaksi`}
-              helper={formatRupiah(periodMissingProofAmount)}
-              tone={periodMissingProofCount > 0 ? "rose" : "emerald"}
+          <div className="mt-4 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MiniStat
+                label="Iuran masuk periode"
+                value={formatRupiah(periodIuranMasuk)}
+                tone="emerald"
+              />
+              <MiniStat
+                label="Vendor keluar periode"
+                value={formatRupiah(periodArusKeluarVendor)}
+                tone="amber"
+              />
+              <MiniStat
+                label="Saldo kas aktual periode"
+                value={formatRupiah(periodSaldoKas)}
+                helper="Pemasukan periode - pembayaran vendor periode"
+                tone={periodSaldoKas >= 0 ? "sky" : "rose"}
+              />
+              <MiniStat
+                label="Transaksi tanpa bukti"
+                value={`${periodMissingProofCount} transaksi`}
+                helper={formatRupiah(periodMissingProofAmount)}
+                tone={periodMissingProofCount > 0 ? "rose" : "emerald"}
+              />
+            </div>
+
+            <InlineBanner
+              title="Catatan angka periode"
+              text={`Saldo kas aktual periode dihitung dari pemasukan periode dikurangi pembayaran vendor periode. Proyeksi saldo rencana periode dihitung dari pemasukan periode dikurangi tagihan vendor yang jatuh tempo pada periode tersebut dan admin vendor.`}
+              tone="sky"
             />
           </div>
         ) : null}
@@ -681,12 +696,16 @@ export default function HomePage({ app }) {
         />
 
         <ProgressPanel
-          title="Progress Pembayaran Vendor"
-          subtitle={`${hasDateFilter ? filteredExpenseRows.length : expenseRows.length} tagihan vendor tercatat · sisa tagihan ${formatRupiah(activeVendorOutstanding)}`}
+          title={hasDateFilter ? "Progress Vendor Periode" : "Progress Pembayaran Vendor"}
+          subtitle={
+            hasDateFilter
+              ? `${filteredExpenseRows.length} tagihan jatuh tempo pada periode ini · pembayaran vendor periode ${formatRupiah(activeLinkedVendorPaid)}`
+              : `${expenseRows.length} tagihan vendor tercatat · sisa tagihan ${formatRupiah(activeVendorOutstanding)}`
+          }
           value={activeLinkedVendorPaid}
           max={activeTotalTagihan}
           percentLabel={`${vendorPercent}%`}
-          leftLabel={hasDateFilter ? "Dibayar periode" : "Sudah dibayar"}
+          leftLabel={hasDateFilter ? "Dibayar pada periode" : "Sudah dibayar"}
           rightLabel={hasDateFilter ? "Tagihan jatuh tempo periode" : "Total tagihan"}
           tone={activeVendorOutstanding > 0 ? "rose" : "emerald"}
         />
@@ -715,7 +734,7 @@ export default function HomePage({ app }) {
 
           <StatCard
             icon={<Receipt className="h-5 w-5 text-amber-700" />}
-            label={hasDateFilter ? "Tagihan vendor periode" : "Total tagihan vendor"}
+            label={hasDateFilter ? "Tagihan vendor jatuh tempo periode" : "Total tagihan vendor"}
             value={formatRupiah(activeTotalTagihan)}
             tone="bg-amber-100"
             helper={`${hasDateFilter ? filteredExpenseRows.length : expenseRows.length} tagihan tercatat`}
@@ -812,17 +831,17 @@ export default function HomePage({ app }) {
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <MiniStat
-                label={hasDateFilter ? "Tagihan periode" : "Total tagihan"}
+                label={hasDateFilter ? "Tagihan jatuh tempo periode" : "Total tagihan"}
                 value={formatRupiah(activeTotalTagihan)}
                 tone="amber"
               />
               <MiniStat
-                label={hasDateFilter ? "Dibayar periode" : "Sudah dibayar"}
+                label={hasDateFilter ? "Dibayar pada periode" : "Sudah dibayar"}
                 value={formatRupiah(activeLinkedVendorPaid)}
                 tone="emerald"
               />
               <MiniStat
-                label={hasDateFilter ? "Sisa periode" : "Sisa"}
+                label={hasDateFilter ? "Sisa tagihan periode" : "Sisa"}
                 value={formatRupiah(activeVendorOutstanding)}
                 tone={activeVendorOutstanding > 0 ? "rose" : "emerald"}
               />
