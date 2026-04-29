@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
+  Calendar,
   Download,
   FileText,
   Printer,
@@ -48,6 +49,55 @@ const formatFileDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+const isWithinDateRange = (dateValue, startDate, endDate) => {
+  if (!startDate && !endDate) return true;
+  if (!dateValue) return false;
+
+  const normalizedDate = String(dateValue).slice(0, 10);
+  if (startDate && normalizedDate < startDate) return false;
+  if (endDate && normalizedDate > endDate) return false;
+
+  return true;
+};
+
+const formatDisplayDate = (dateValue) => {
+  if (!dateValue) return "";
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${dateValue}T00:00:00`));
+};
+
+const buildPeriodLabel = (startDate, endDate) => {
+  if (startDate && endDate) {
+    return `${formatDisplayDate(startDate)} sampai ${formatDisplayDate(endDate)}`;
+  }
+
+  if (startDate) return `Mulai ${formatDisplayDate(startDate)}`;
+  if (endDate) return `Sampai ${formatDisplayDate(endDate)}`;
+
+  return "Semua tanggal";
+};
+
+const buildPeriodFileSuffix = (startDate, endDate) => {
+  if (startDate && endDate) return `${startDate}-sampai-${endDate}`;
+  if (startDate) return `mulai-${startDate}`;
+  if (endDate) return `sampai-${endDate}`;
+
+  return formatFileDate();
+};
+
+const sumNominal = (rows) =>
+  rows.reduce((sum, row) => sum + Number(row?.nominal || 0), 0);
+
+const sumVendorPaymentAmount = (rows) =>
+  rows.reduce(
+    (sum, row) => sum + Number(row?.nominal || 0) + Number(row?.biayaAdmin || 0),
+    0
+  );
+
 const sanitizePdfText = (value) =>
   String(value ?? "-")
     .replace(/\u00a0/g, " ")
@@ -58,7 +108,7 @@ const sanitizePdfText = (value) =>
 
 const rupiahForPdf = (value) => sanitizePdfText(formatRupiah(value));
 
-const addPdfHeader = (doc, title, printedAt) => {
+const addPdfHeader = (doc, title, printedAt, periodLabel) => {
   doc.setProperties({
     title,
     subject: "Rihlah Pesantren Islam Al Yaqut",
@@ -79,10 +129,16 @@ const addPdfHeader = (doc, title, printedAt) => {
   doc.setTextColor(71, 85, 105);
   doc.text(`Dibuat pada ${sanitizePdfText(printedAt)}`, 14, 32);
 
-  doc.setDrawColor(203, 213, 225);
-  doc.line(14, 38, 196, 38);
+  const hasPeriod = Boolean(periodLabel);
+  if (hasPeriod) {
+    doc.text(`Periode: ${sanitizePdfText(periodLabel)}`, 14, 38);
+  }
 
-  return 46;
+  const lineY = hasPeriod ? 44 : 38;
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, lineY, 196, lineY);
+
+  return lineY + 8;
 };
 
 const addPdfFooter = (doc, printedAt) => {
@@ -366,6 +422,8 @@ const PrintStyles = () => (
 
 export default function LaporanPage({ app }) {
   const [printScope, setPrintScope] = useState(null);
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
 
   const {
     canEdit,
@@ -375,6 +433,8 @@ export default function LaporanPage({ app }) {
     participantPaymentHistory,
     vendorPaymentRows,
     expenseLookup,
+    expenses,
+    otherIncomes,
     totalIuranTarget,
     totalIuranMasuk,
     totalIuranOutstanding,
@@ -396,24 +456,70 @@ export default function LaporanPage({ app }) {
     exportCsvReport,
   } = app;
 
-  const participantWithoutProof = useMemo(() => {
-    const rows = Array.isArray(participantPaymentHistory)
-      ? participantPaymentHistory
-      : [];
+  const hasDateFilter = Boolean(filterStartDate || filterEndDate);
+  const periodLabel = useMemo(
+    () => buildPeriodLabel(filterStartDate, filterEndDate),
+    [filterEndDate, filterStartDate]
+  );
+  const periodFileSuffix = useMemo(
+    () => buildPeriodFileSuffix(filterStartDate, filterEndDate),
+    [filterEndDate, filterStartDate]
+  );
 
-    return rows.filter((payment) => !hasParticipantProof(payment));
-  }, [participantPaymentHistory]);
+  const participantPaymentRows = useMemo(
+    () =>
+      Array.isArray(participantPaymentHistory) ? participantPaymentHistory : [],
+    [participantPaymentHistory]
+  );
 
-  const vendorWithoutProof = useMemo(() => {
-    const rows = Array.isArray(vendorPaymentRows) ? vendorPaymentRows : [];
-
-    return rows.filter((payment) => !hasVendorProof(payment));
-  }, [vendorPaymentRows]);
-
-  const vendorAuditRows = useMemo(
+  const allVendorPaymentRows = useMemo(
     () => (Array.isArray(vendorPaymentRows) ? vendorPaymentRows : []),
     [vendorPaymentRows]
   );
+
+  const filteredParticipantPaymentRows = useMemo(
+    () =>
+      participantPaymentRows.filter((payment) =>
+        isWithinDateRange(payment?.tanggal, filterStartDate, filterEndDate)
+      ),
+    [filterEndDate, filterStartDate, participantPaymentRows]
+  );
+
+  const filteredVendorPaymentRows = useMemo(
+    () =>
+      allVendorPaymentRows.filter((payment) =>
+        isWithinDateRange(payment?.tanggal, filterStartDate, filterEndDate)
+      ),
+    [allVendorPaymentRows, filterEndDate, filterStartDate]
+  );
+
+  const filteredExpenses = useMemo(() => {
+    const rows = Array.isArray(expenses) ? expenses : [];
+
+    return rows.filter((expense) =>
+      isWithinDateRange(expense?.jatuhTempo, filterStartDate, filterEndDate)
+    );
+  }, [expenses, filterEndDate, filterStartDate]);
+
+  const filteredOtherIncomes = useMemo(() => {
+    const rows = Array.isArray(otherIncomes) ? otherIncomes : [];
+
+    return rows.filter((income) =>
+      isWithinDateRange(income?.tanggal, filterStartDate, filterEndDate)
+    );
+  }, [filterEndDate, filterStartDate, otherIncomes]);
+
+  const participantWithoutProof = useMemo(
+    () => filteredParticipantPaymentRows.filter((payment) => !hasParticipantProof(payment)),
+    [filteredParticipantPaymentRows]
+  );
+
+  const vendorWithoutProof = useMemo(
+    () => filteredVendorPaymentRows.filter((payment) => !hasVendorProof(payment)),
+    [filteredVendorPaymentRows]
+  );
+
+  const vendorAuditRows = filteredVendorPaymentRows;
 
   const auditProofSummary = useMemo(
     () => ({
@@ -433,6 +539,26 @@ export default function LaporanPage({ app }) {
     [participantWithoutProof, vendorWithoutProof]
   );
 
+  const reportTotalIuranMasuk = hasDateFilter
+    ? sumNominal(filteredParticipantPaymentRows)
+    : totalIuranMasuk;
+  const reportTotalOtherIncome = hasDateFilter
+    ? sumNominal(filteredOtherIncomes)
+    : totalOtherIncome;
+  const reportTotalTagihan = hasDateFilter ? sumNominal(filteredExpenses) : totalTagihan;
+  const reportTotalArusKeluarVendor = hasDateFilter
+    ? sumVendorPaymentAmount(filteredVendorPaymentRows)
+    : totalArusKeluarVendor;
+  const reportSaldoKasSaatIni = hasDateFilter
+    ? reportTotalIuranMasuk + reportTotalOtherIncome - reportTotalArusKeluarVendor
+    : saldoKasSaatIni;
+  const reportProyeksiSaldoAkhir = hasDateFilter
+    ? reportTotalIuranMasuk + reportTotalOtherIncome - reportTotalTagihan
+    : proyeksiSaldoAkhir;
+  const reportTotalVendorOutstanding = hasDateFilter
+    ? Math.max(reportTotalTagihan - reportTotalArusKeluarVendor, 0)
+    : totalVendorOutstanding;
+
   const hasMissingProof = auditProofSummary.totalWithoutProof > 0;
   const printDate = useMemo(() => formatPrintDate(), []);
 
@@ -445,6 +571,11 @@ export default function LaporanPage({ app }) {
         window.print();
       }, 80);
     });
+  };
+
+  const resetDateFilter = () => {
+    setFilterStartDate("");
+    setFilterEndDate("");
   };
 
   useEffect(() => {
@@ -469,7 +600,7 @@ export default function LaporanPage({ app }) {
   const downloadReportPdf = () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = addPdfHeader(doc, "Laporan Keuangan Kegiatan", generatedAt);
+    let y = addPdfHeader(doc, "Laporan Keuangan Kegiatan", generatedAt, periodLabel);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -478,13 +609,13 @@ export default function LaporanPage({ app }) {
       head: [["Komponen", "Nilai"]],
       body: [
         ["Total target iuran", rupiahForPdf(totalIuranTarget)],
-        ["Total iuran masuk", rupiahForPdf(totalIuranMasuk)],
-        ["Total tagihan vendor", rupiahForPdf(totalTagihan)],
-        ["Pembayaran vendor + admin", rupiahForPdf(totalArusKeluarVendor)],
-        ["Saldo kas saat ini", rupiahForPdf(saldoKasSaatIni)],
-        ["Proyeksi saldo akhir", rupiahForPdf(proyeksiSaldoAkhir)],
-        ["Sisa tagihan vendor", rupiahForPdf(totalVendorOutstanding)],
-        ["Pemasukan lain", rupiahForPdf(totalOtherIncome)],
+        ["Total iuran masuk", rupiahForPdf(reportTotalIuranMasuk)],
+        ["Total tagihan vendor", rupiahForPdf(reportTotalTagihan)],
+        ["Pembayaran vendor + admin", rupiahForPdf(reportTotalArusKeluarVendor)],
+        ["Saldo kas saat ini", rupiahForPdf(reportSaldoKasSaatIni)],
+        ["Proyeksi saldo akhir", rupiahForPdf(reportProyeksiSaldoAkhir)],
+        ["Sisa tagihan vendor", rupiahForPdf(reportTotalVendorOutstanding)],
+        ["Pemasukan lain", rupiahForPdf(reportTotalOtherIncome)],
       ],
       columnStyles: {
         0: { cellWidth: 95 },
@@ -503,7 +634,7 @@ export default function LaporanPage({ app }) {
         [
           "Narasi pimpinan",
           `Kas saat ini ${rupiahForPdf(
-            saldoKasSaatIni
+            reportSaldoKasSaatIni
           )}. Masih ada tunggakan iuran ${rupiahForPdf(
             totalIuranOutstanding
           )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`,
@@ -511,9 +642,9 @@ export default function LaporanPage({ app }) {
         [
           "Narasi vendor",
           `Sisa tagihan vendor ${rupiahForPdf(
-            totalVendorOutstanding
+            reportTotalVendorOutstanding
           )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${rupiahForPdf(
-            proyeksiSaldoAkhir
+            reportProyeksiSaldoAkhir
           )}.`,
         ],
       ],
@@ -552,7 +683,7 @@ export default function LaporanPage({ app }) {
     });
 
     addPdfFooter(doc, generatedAt);
-    doc.save(`laporan-keuangan-rihlah-${formatFileDate()}.pdf`);
+    doc.save(`laporan-keuangan-rihlah-${periodFileSuffix}.pdf`);
   };
 
   const downloadAuditPdf = () => {
@@ -560,7 +691,7 @@ export default function LaporanPage({ app }) {
 
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt);
+    let y = addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt, periodLabel);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -729,7 +860,7 @@ export default function LaporanPage({ app }) {
     });
 
     addPdfFooter(doc, generatedAt);
-    doc.save(`audit-bukti-pembayaran-rihlah-${formatFileDate()}.pdf`);
+    doc.save(`audit-bukti-pembayaran-rihlah-${periodFileSuffix}.pdf`);
   };
 
   return (
@@ -748,6 +879,56 @@ export default function LaporanPage({ app }) {
         <p className="mt-1 text-sm text-slate-600">
           Dicetak pada {printDate}
         </p>
+        <p className="mt-1 text-sm text-slate-600">
+          Periode: {periodLabel}
+        </p>
+      </div>
+
+      <div className="no-print rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <Calendar className="h-4 w-4 text-slate-500" />
+              Filter tanggal laporan
+            </div>
+            <p className="mt-1 text-sm text-slate-500">
+              Periode aktif: <span className="font-semibold text-slate-700">{periodLabel}</span>
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <label className="text-sm font-medium text-slate-700">
+              Tanggal awal
+              <input
+                type="date"
+                value={filterStartDate}
+                max={filterEndDate || undefined}
+                onChange={(event) => setFilterStartDate(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <label className="text-sm font-medium text-slate-700">
+              Tanggal akhir
+              <input
+                type="date"
+                value={filterEndDate}
+                min={filterStartDate || undefined}
+                onChange={(event) => setFilterEndDate(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={resetDateFilter}
+              className={buttonOutline}
+              disabled={!hasDateFilter}
+            >
+              Reset filter
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="no-print flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -817,37 +998,37 @@ export default function LaporanPage({ app }) {
             />
             <MiniStat
               label="Total iuran masuk"
-              value={formatRupiah(totalIuranMasuk)}
+              value={formatRupiah(reportTotalIuranMasuk)}
               tone="emerald"
             />
             <MiniStat
               label="Total tagihan vendor"
-              value={formatRupiah(totalTagihan)}
+              value={formatRupiah(reportTotalTagihan)}
               tone="amber"
             />
             <MiniStat
               label="Pembayaran vendor + admin"
-              value={formatRupiah(totalArusKeluarVendor)}
+              value={formatRupiah(reportTotalArusKeluarVendor)}
               tone="rose"
             />
             <MiniStat
               label="Saldo kas saat ini"
-              value={formatRupiah(saldoKasSaatIni)}
-              tone={saldoKasSaatIni >= 0 ? "emerald" : "rose"}
+              value={formatRupiah(reportSaldoKasSaatIni)}
+              tone={reportSaldoKasSaatIni >= 0 ? "emerald" : "rose"}
             />
             <MiniStat
               label="Proyeksi saldo akhir"
-              value={formatRupiah(proyeksiSaldoAkhir)}
-              tone={proyeksiSaldoAkhir >= 0 ? "emerald" : "rose"}
+              value={formatRupiah(reportProyeksiSaldoAkhir)}
+              tone={reportProyeksiSaldoAkhir >= 0 ? "emerald" : "rose"}
             />
             <MiniStat
               label="Sisa tagihan vendor"
-              value={formatRupiah(totalVendorOutstanding)}
-              tone={totalVendorOutstanding > 0 ? "amber" : "emerald"}
+              value={formatRupiah(reportTotalVendorOutstanding)}
+              tone={reportTotalVendorOutstanding > 0 ? "amber" : "emerald"}
             />
             <MiniStat
               label="Pemasukan lain"
-              value={formatRupiah(totalOtherIncome)}
+              value={formatRupiah(reportTotalOtherIncome)}
               tone="violet"
             />
           </div>
@@ -856,7 +1037,7 @@ export default function LaporanPage({ app }) {
             <InlineBanner
               title="Narasi pimpinan"
               text={`Kas saat ini ${formatRupiah(
-                saldoKasSaatIni
+                reportSaldoKasSaatIni
               )}. Masih ada tunggakan iuran ${formatRupiah(
                 totalIuranOutstanding
               )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`}
@@ -866,11 +1047,11 @@ export default function LaporanPage({ app }) {
             <InlineBanner
               title="Narasi vendor"
               text={`Sisa tagihan vendor ${formatRupiah(
-                totalVendorOutstanding
+                reportTotalVendorOutstanding
               )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${formatRupiah(
-                proyeksiSaldoAkhir
+                reportProyeksiSaldoAkhir
               )}.`}
-              tone={totalVendorOutstanding > 0 ? "amber" : "emerald"}
+              tone={reportTotalVendorOutstanding > 0 ? "amber" : "emerald"}
             />
           </div>
 
