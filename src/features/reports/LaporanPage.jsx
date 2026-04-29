@@ -559,6 +559,56 @@ export default function LaporanPage({ app }) {
     ? Math.max(reportTotalTagihan - reportTotalArusKeluarVendor, 0)
     : totalVendorOutstanding;
 
+  const targetIuranLabel = "Target iuran total kegiatan";
+  const iuranMasukLabel = hasDateFilter
+    ? "Iuran masuk periode"
+    : "Total iuran masuk";
+  const tagihanVendorLabel = hasDateFilter
+    ? "Tagihan vendor jatuh tempo periode"
+    : "Total tagihan vendor";
+  const pembayaranVendorLabel = hasDateFilter
+    ? "Pembayaran vendor periode + admin"
+    : "Pembayaran vendor + admin";
+  const saldoKasLabel = hasDateFilter ? "Saldo kas periode" : "Saldo kas saat ini";
+  const proyeksiSaldoLabel = hasDateFilter
+    ? "Proyeksi saldo periode"
+    : "Proyeksi saldo akhir";
+  const sisaTagihanVendorLabel = hasDateFilter
+    ? "Sisa tagihan vendor periode"
+    : "Sisa tagihan vendor";
+  const pemasukanLainLabel = hasDateFilter
+    ? "Pemasukan lain periode"
+    : "Pemasukan lain";
+
+  const narasiPimpinanText = hasDateFilter
+    ? `Pada periode ${periodLabel}, saldo kas periode adalah ${formatRupiah(
+        reportSaldoKasSaatIni
+      )}. Target dan tunggakan iuran tetap dihitung dari total kegiatan: masih ada tunggakan ${formatRupiah(
+        totalIuranOutstanding
+      )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`
+    : `Kas saat ini ${formatRupiah(
+        reportSaldoKasSaatIni
+      )}. Masih ada tunggakan iuran ${formatRupiah(
+        totalIuranOutstanding
+      )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`;
+
+  const narasiVendorText = hasDateFilter
+    ? `Pada periode ${periodLabel}, pembayaran vendor + admin sebesar ${formatRupiah(
+        reportTotalArusKeluarVendor
+      )}. Tagihan vendor jatuh tempo periode ini ${formatRupiah(
+        reportTotalTagihan
+      )}, sehingga sisa tagihan vendor periode menjadi ${formatRupiah(
+        reportTotalVendorOutstanding
+      )}.`
+    : `Sisa tagihan vendor ${formatRupiah(
+        reportTotalVendorOutstanding
+      )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${formatRupiah(
+        reportProyeksiSaldoAkhir
+      )}.`;
+
+  const narasiPimpinanPdfText = sanitizePdfText(narasiPimpinanText);
+  const narasiVendorPdfText = sanitizePdfText(narasiVendorText);
+
   const hasMissingProof = auditProofSummary.totalWithoutProof > 0;
   const printDate = useMemo(() => formatPrintDate(), []);
 
@@ -608,14 +658,14 @@ export default function LaporanPage({ app }) {
       margin: { left: 14, right: 14 },
       head: [["Komponen", "Nilai"]],
       body: [
-        ["Total target iuran", rupiahForPdf(totalIuranTarget)],
-        ["Total iuran masuk", rupiahForPdf(reportTotalIuranMasuk)],
-        ["Total tagihan vendor", rupiahForPdf(reportTotalTagihan)],
-        ["Pembayaran vendor + admin", rupiahForPdf(reportTotalArusKeluarVendor)],
-        ["Saldo kas saat ini", rupiahForPdf(reportSaldoKasSaatIni)],
-        ["Proyeksi saldo akhir", rupiahForPdf(reportProyeksiSaldoAkhir)],
-        ["Sisa tagihan vendor", rupiahForPdf(reportTotalVendorOutstanding)],
-        ["Pemasukan lain", rupiahForPdf(reportTotalOtherIncome)],
+        [targetIuranLabel, rupiahForPdf(totalIuranTarget)],
+        [iuranMasukLabel, rupiahForPdf(reportTotalIuranMasuk)],
+        [tagihanVendorLabel, rupiahForPdf(reportTotalTagihan)],
+        [pembayaranVendorLabel, rupiahForPdf(reportTotalArusKeluarVendor)],
+        [saldoKasLabel, rupiahForPdf(reportSaldoKasSaatIni)],
+        [proyeksiSaldoLabel, rupiahForPdf(reportProyeksiSaldoAkhir)],
+        [sisaTagihanVendorLabel, rupiahForPdf(reportTotalVendorOutstanding)],
+        [pemasukanLainLabel, rupiahForPdf(reportTotalOtherIncome)],
       ],
       columnStyles: {
         0: { cellWidth: 95 },
@@ -631,22 +681,8 @@ export default function LaporanPage({ app }) {
       margin: { left: 14, right: 14 },
       head: [["Narasi", "Keterangan"]],
       body: [
-        [
-          "Narasi pimpinan",
-          `Kas saat ini ${rupiahForPdf(
-            reportSaldoKasSaatIni
-          )}. Masih ada tunggakan iuran ${rupiahForPdf(
-            totalIuranOutstanding
-          )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`,
-        ],
-        [
-          "Narasi vendor",
-          `Sisa tagihan vendor ${rupiahForPdf(
-            reportTotalVendorOutstanding
-          )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${rupiahForPdf(
-            reportProyeksiSaldoAkhir
-          )}.`,
-        ],
+        ["Narasi pimpinan", narasiPimpinanPdfText],
+        ["Narasi vendor", narasiVendorPdfText],
       ],
       columnStyles: {
         0: { cellWidth: 42, fontStyle: "bold" },
@@ -992,42 +1028,42 @@ export default function LaporanPage({ app }) {
         >
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
             <MiniStat
-              label="Total target iuran"
+              label={targetIuranLabel}
               value={formatRupiah(totalIuranTarget)}
               tone="sky"
             />
             <MiniStat
-              label="Total iuran masuk"
+              label={iuranMasukLabel}
               value={formatRupiah(reportTotalIuranMasuk)}
               tone="emerald"
             />
             <MiniStat
-              label="Total tagihan vendor"
+              label={tagihanVendorLabel}
               value={formatRupiah(reportTotalTagihan)}
               tone="amber"
             />
             <MiniStat
-              label="Pembayaran vendor + admin"
+              label={pembayaranVendorLabel}
               value={formatRupiah(reportTotalArusKeluarVendor)}
               tone="rose"
             />
             <MiniStat
-              label="Saldo kas saat ini"
+              label={saldoKasLabel}
               value={formatRupiah(reportSaldoKasSaatIni)}
               tone={reportSaldoKasSaatIni >= 0 ? "emerald" : "rose"}
             />
             <MiniStat
-              label="Proyeksi saldo akhir"
+              label={proyeksiSaldoLabel}
               value={formatRupiah(reportProyeksiSaldoAkhir)}
               tone={reportProyeksiSaldoAkhir >= 0 ? "emerald" : "rose"}
             />
             <MiniStat
-              label="Sisa tagihan vendor"
+              label={sisaTagihanVendorLabel}
               value={formatRupiah(reportTotalVendorOutstanding)}
               tone={reportTotalVendorOutstanding > 0 ? "amber" : "emerald"}
             />
             <MiniStat
-              label="Pemasukan lain"
+              label={pemasukanLainLabel}
               value={formatRupiah(reportTotalOtherIncome)}
               tone="violet"
             />
@@ -1036,21 +1072,13 @@ export default function LaporanPage({ app }) {
           <div className="mt-6 grid gap-4 2xl:grid-cols-2 print-grid-2">
             <InlineBanner
               title="Narasi pimpinan"
-              text={`Kas saat ini ${formatRupiah(
-                reportSaldoKasSaatIni
-              )}. Masih ada tunggakan iuran ${formatRupiah(
-                totalIuranOutstanding
-              )} dari ${jumlahBelumBayar + jumlahCicilan} santri.`}
+              text={narasiPimpinanText}
               tone={financeHealth.tone}
             />
 
             <InlineBanner
               title="Narasi vendor"
-              text={`Sisa tagihan vendor ${formatRupiah(
-                reportTotalVendorOutstanding
-              )}. Jika seluruh tagihan dilunasi hari ini, proyeksi saldo akhir menjadi ${formatRupiah(
-                reportProyeksiSaldoAkhir
-              )}.`}
+              text={narasiVendorText}
               tone={reportTotalVendorOutstanding > 0 ? "amber" : "emerald"}
             />
           </div>
