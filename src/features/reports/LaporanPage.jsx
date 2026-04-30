@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import {
   buttonOutline,
+  buttonPrimary,
   formatRupiah,
   Section,
   Pill,
@@ -107,6 +108,20 @@ const sanitizePdfText = (value) =>
     .trim();
 
 const rupiahForPdf = (value) => sanitizePdfText(formatRupiah(value));
+
+
+const getFinalParticipantTone = (status) => {
+  if (status === "Lunas") return "emerald";
+  if (status === "Cicilan") return "amber";
+  return "rose";
+};
+
+const getFinalVendorTone = (status) => {
+  if (status === "Lunas") return "emerald";
+  if (status === "Lebih Bayar") return "amber";
+  if (status === "DP / Cicilan") return "sky";
+  return "rose";
+};
 
 const addPdfHeader = (doc, title, printedAt, periodLabel) => {
   doc.setProperties({
@@ -427,12 +442,15 @@ export default function LaporanPage({ app }) {
 
   const {
     canEdit,
+    config,
     laporanView,
     setLaporanView,
     importInputRef,
     participantPaymentHistory,
+    participantRows = [],
     vendorPaymentRows,
     expenseLookup,
+    expenseRows = [],
     expenses,
     otherIncomes,
     totalIuranTarget,
@@ -447,6 +465,8 @@ export default function LaporanPage({ app }) {
     totalVendorUnlinked,
     saldoKasSaatIni,
     proyeksiSaldoAkhir,
+    jumlahSantri = 0,
+    jumlahLunas = 0,
     jumlahBelumBayar,
     jumlahCicilan,
     warnings,
@@ -559,6 +579,104 @@ export default function LaporanPage({ app }) {
     ? Math.max(reportTotalTagihan - reportTotalArusKeluarVendor, 0)
     : totalVendorOutstanding;
 
+  const allParticipantWithoutProof = useMemo(
+    () => participantPaymentRows.filter((payment) => !hasParticipantProof(payment)),
+    [participantPaymentRows]
+  );
+
+  const allVendorWithoutProof = useMemo(
+    () => allVendorPaymentRows.filter((payment) => !hasVendorProof(payment)),
+    [allVendorPaymentRows]
+  );
+
+  const finalOutstandingParticipants = useMemo(() => {
+    const rows = Array.isArray(participantRows) ? participantRows : [];
+
+    return rows
+      .filter((item) => Number(item?.remaining || 0) > 0 || item?.status !== "Lunas")
+      .sort((a, b) => {
+        const remainingA = Number(a?.remaining || 0);
+        const remainingB = Number(b?.remaining || 0);
+
+        if (remainingA !== remainingB) return remainingB - remainingA;
+
+        return String(a?.nama || "").localeCompare(String(b?.nama || ""));
+      });
+  }, [participantRows]);
+
+  const finalVendorStatusRows = useMemo(() => {
+    const rows = Array.isArray(expenseRows) ? expenseRows : [];
+
+    return [...rows].sort((a, b) => {
+      const dateA = String(a?.jatuhTempo || "9999-12-31");
+      const dateB = String(b?.jatuhTempo || "9999-12-31");
+
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+      return String(a?.vendor || a?.nama || "").localeCompare(
+        String(b?.vendor || b?.nama || "")
+      );
+    });
+  }, [expenseRows]);
+
+  const finalTransactionsWithoutProof = useMemo(() => {
+    const participantRows = allParticipantWithoutProof.map((payment) => ({
+      id: `participant-${payment.id}`,
+      jenis: "Iuran santri",
+      nama: payment.participantName || "Santri tidak diketahui",
+      detail: payment.participantClass || "Tanpa kelas",
+      tanggal: payment.tanggal || "-",
+      metode: payment.metode || "-",
+      nominal: Number(payment.nominal || 0),
+      catatan: payment.catatan || "-",
+    }));
+
+    const vendorRows = allVendorWithoutProof.map((payment) => {
+      const linkedExpense = expenseLookup?.[String(payment.expenseId)];
+
+      return {
+        id: `vendor-${payment.id}`,
+        jenis: "Pembayaran vendor",
+        nama: linkedExpense?.vendor || payment.vendorSnapshot || "Belum ditautkan",
+        detail: linkedExpense?.nama || "Pembayaran manual",
+        tanggal: payment.tanggal || "-",
+        metode: payment.metode || "-",
+        nominal: Number(payment.nominal || 0),
+        catatan: payment.catatan || "-",
+      };
+    });
+
+    return [...participantRows, ...vendorRows].sort((a, b) =>
+      String(a.tanggal || "").localeCompare(String(b.tanggal || ""))
+    );
+  }, [allParticipantWithoutProof, allVendorWithoutProof, expenseLookup]);
+
+  const finalTotalMissingProofAmount = finalTransactionsWithoutProof.reduce(
+    (sum, item) => sum + Number(item.nominal || 0),
+    0
+  );
+
+  const finalStatus =
+    finalOutstandingParticipants.length > 0 || finalTransactionsWithoutProof.length > 0
+      ? "Belum Aman"
+      : totalVendorOutstanding > 0 || totalVendorOverpaid + totalIuranOverpaid > 0
+        ? "Perlu Dicek"
+        : "Siap";
+
+  const finalStatusTone =
+    finalStatus === "Siap"
+      ? "emerald"
+      : finalStatus === "Belum Aman"
+        ? "rose"
+        : "amber";
+
+  const finalStatusText =
+    finalStatus === "Siap"
+      ? "Data utama sudah siap untuk diserahkan ke panitia dan pimpinan. Tetap simpan backup final sebelum hari-H."
+      : finalStatus === "Belum Aman"
+        ? `Masih ada ${finalOutstandingParticipants.length} santri belum lunas/cicilan dan ${finalTransactionsWithoutProof.length} transaksi tanpa bukti. Lengkapi sebelum laporan final dibagikan.`
+        : "Data sudah mendekati siap, tetapi masih ada item yang perlu dicek seperti sisa tagihan vendor atau selisih lebih bayar.";
+
   const targetIuranLabel = "Target iuran total kegiatan";
   const iuranMasukLabel = hasDateFilter
     ? "Iuran masuk periode"
@@ -613,7 +731,7 @@ export default function LaporanPage({ app }) {
   const printDate = useMemo(() => formatPrintDate(), []);
 
   const requestPrint = (scope) => {
-    if (scope === "audit" && !canEdit) return;
+    if ((scope === "audit" || scope === "final") && !canEdit) return;
     setPrintScope(scope);
 
     window.requestAnimationFrame(() => {
@@ -646,6 +764,9 @@ export default function LaporanPage({ app }) {
 
   const showProofAuditSection =
     canEdit && (printScope === "audit" || (!printScope && laporanView === "audit"));
+
+  const showFinalSection =
+    canEdit && (printScope === "final" || (!printScope && laporanView === "final"));
 
   const downloadReportPdf = () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -720,6 +841,197 @@ export default function LaporanPage({ app }) {
 
     addPdfFooter(doc, generatedAt);
     doc.save(`laporan-keuangan-rihlah-${periodFileSuffix}.pdf`);
+  };
+
+  const downloadFinalReportPdf = () => {
+    if (!canEdit) return;
+
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const generatedAt = formatPrintDate();
+    let y = addPdfHeader(
+      doc,
+      "Laporan Final Panitia",
+      generatedAt,
+      "Data final keseluruhan kegiatan"
+    );
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Komponen", "Nilai"]],
+      body: [
+        ["Nama kegiatan", sanitizePdfText(config?.namaKegiatan || "Rihlah Pesantren Islam Al Yaqut")],
+        ["Tanggal kegiatan", "6-7 Mei 2026"],
+        ["Total santri", `${jumlahSantri} santri`],
+        ["Santri lunas", `${jumlahLunas} santri`],
+        ["Santri belum lunas/cicilan", `${finalOutstandingParticipants.length} santri`],
+        ["Total target iuran", rupiahForPdf(totalIuranTarget)],
+        ["Total iuran masuk", rupiahForPdf(totalIuranMasuk)],
+        ["Total tunggakan", rupiahForPdf(totalIuranOutstanding)],
+        ["Total tagihan vendor", rupiahForPdf(totalTagihan)],
+        ["Pembayaran vendor + admin", rupiahForPdf(totalArusKeluarVendor)],
+        ["Saldo kas saat ini", rupiahForPdf(saldoKasSaatIni)],
+        ["Proyeksi saldo akhir", rupiahForPdf(proyeksiSaldoAkhir)],
+      ],
+      columnStyles: {
+        0: { cellWidth: 85, fontStyle: "bold" },
+        1: { cellWidth: 97, halign: "right" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Status final", "Keterangan"]],
+      body: [[finalStatus, sanitizePdfText(finalStatusText)]],
+      columnStyles: {
+        0: { cellWidth: 38, fontStyle: "bold" },
+        1: { cellWidth: 144 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (y > 235) {
+      doc.addPage();
+      y = 16;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Daftar Santri Belum Lunas", 14, y);
+    y += 5;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Nama", "Kelas", "Kamar", "Target", "Sudah Bayar", "Sisa", "Status"]],
+      body:
+        finalOutstandingParticipants.length > 0
+          ? finalOutstandingParticipants.map((item) => [
+              sanitizePdfText(item.nama),
+              sanitizePdfText(item.kelas || "-"),
+              sanitizePdfText(item.kamar || "-"),
+              rupiahForPdf(item.targetIuran),
+              rupiahForPdf(item.totalPaid),
+              rupiahForPdf(item.remaining),
+              sanitizePdfText(item.status || "-"),
+            ])
+          : [["Semua santri sudah lunas.", "", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.8,
+        cellPadding: 1.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 45, fontStyle: "bold" },
+        1: { cellWidth: 13, halign: "center" },
+        2: { cellWidth: 18 },
+        3: { cellWidth: 24, halign: "right" },
+        4: { cellWidth: 26, halign: "right" },
+        5: { cellWidth: 24, halign: "right", fontStyle: "bold" },
+        6: { cellWidth: 32 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (y > 235) {
+      doc.addPage();
+      y = 16;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Status Vendor", 14, y);
+    y += 5;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Vendor", "Keperluan", "Jatuh Tempo", "Tagihan", "Dibayar", "Sisa", "Status"]],
+      body:
+        finalVendorStatusRows.length > 0
+          ? finalVendorStatusRows.map((item) => [
+              sanitizePdfText(item.vendor || "-"),
+              sanitizePdfText(item.nama || "-"),
+              sanitizePdfText(item.jatuhTempo || "-"),
+              rupiahForPdf(item.nominal),
+              rupiahForPdf(item.paid),
+              rupiahForPdf(item.remaining),
+              sanitizePdfText(item.status || "-"),
+            ])
+          : [["Belum ada tagihan vendor.", "", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.8,
+        cellPadding: 1.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 32, fontStyle: "bold" },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 25, halign: "right" },
+        4: { cellWidth: 25, halign: "right" },
+        5: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+        6: { cellWidth: 18 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (y > 235) {
+      doc.addPage();
+      y = 16;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Transaksi Tanpa Bukti", 14, y);
+    y += 5;
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Jenis", "Nama/Keperluan", "Tanggal", "Metode", "Nominal", "Catatan"]],
+      body:
+        finalTransactionsWithoutProof.length > 0
+          ? finalTransactionsWithoutProof.map((item) => [
+              sanitizePdfText(item.jenis),
+              sanitizePdfText(`${item.nama} - ${item.detail}`),
+              sanitizePdfText(item.tanggal),
+              sanitizePdfText(item.metode),
+              rupiahForPdf(item.nominal),
+              sanitizePdfText(item.catatan),
+            ])
+          : [["Semua transaksi sudah memiliki bukti.", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.8,
+        cellPadding: 1.5,
+      },
+      columnStyles: {
+        0: { cellWidth: 28, fontStyle: "bold" },
+        1: { cellWidth: 55 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 26, halign: "right", fontStyle: "bold" },
+        5: { cellWidth: 31 },
+      },
+    });
+
+    addPdfFooter(doc, generatedAt);
+    doc.save(`laporan-final-panitia-rihlah-${formatFileDate()}.pdf`);
   };
 
   const downloadAuditPdf = () => {
@@ -910,7 +1222,9 @@ export default function LaporanPage({ app }) {
         <h1 className="mt-2 text-2xl font-extrabold text-slate-950">
           {printScope === "audit"
             ? "Lampiran Audit Bukti Pembayaran"
-            : "Laporan Keuangan Kegiatan"}
+            : printScope === "final"
+              ? "Laporan Final Panitia"
+              : "Laporan Keuangan Kegiatan"}
         </h1>
         <p className="mt-1 text-sm text-slate-600">
           Dicetak pada {printDate}
@@ -985,6 +1299,15 @@ export default function LaporanPage({ app }) {
 
           {canEdit ? (
             <button
+              onClick={() => setLaporanView("final")}
+              className={tabClass(laporanView === "final")}
+            >
+              Final Panitia
+            </button>
+          ) : null}
+
+          {canEdit ? (
+            <button
               onClick={() => setLaporanView("audit")}
               className={tabClass(laporanView === "audit")}
             >
@@ -1014,6 +1337,16 @@ export default function LaporanPage({ app }) {
               <button onClick={downloadAuditPdf} className={buttonOutline}>
                 <Download className="mr-2 h-4 w-4" />
                 Download PDF Audit
+              </button>
+
+              <button onClick={() => requestPrint("final")} className={buttonOutline}>
+                <Printer className="mr-2 h-4 w-4" />
+                Cetak Final
+              </button>
+
+              <button onClick={downloadFinalReportPdf} className={buttonPrimary}>
+                <Download className="mr-2 h-4 w-4" />
+                PDF Final
               </button>
             </>
           ) : null}
@@ -1121,6 +1454,141 @@ export default function LaporanPage({ app }) {
                     : "slate"
                 }
               />
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
+      {showFinalSection ? (
+        <Section
+          id="laporan-final"
+          title="Laporan Final Panitia"
+          subtitle="Ringkasan akhir untuk rapat panitia dan pimpinan sebelum Rihlah 6-7 Mei 2026."
+          className="print-section print-audit-section"
+        >
+          <div className="space-y-5">
+            <InlineBanner
+              title={`Status final: ${finalStatus}`}
+              text={finalStatusText}
+              tone={finalStatusTone}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
+              <MiniStat label="Total santri" value={`${jumlahSantri} santri`} helper={`${jumlahLunas} lunas · ${jumlahCicilan} cicilan · ${jumlahBelumBayar} belum bayar`} tone="sky" />
+              <MiniStat label="Total target iuran" value={formatRupiah(totalIuranTarget)} tone="sky" />
+              <MiniStat label="Total iuran masuk" value={formatRupiah(totalIuranMasuk)} tone="emerald" />
+              <MiniStat label="Total tunggakan" value={formatRupiah(totalIuranOutstanding)} tone={totalIuranOutstanding > 0 ? "rose" : "emerald"} />
+              <MiniStat label="Total tagihan vendor" value={formatRupiah(totalTagihan)} tone="amber" />
+              <MiniStat label="Pembayaran vendor + admin" value={formatRupiah(totalArusKeluarVendor)} tone="rose" />
+              <MiniStat label="Saldo kas saat ini" value={formatRupiah(saldoKasSaatIni)} tone={saldoKasSaatIni >= 0 ? "emerald" : "rose"} />
+              <MiniStat label="Proyeksi saldo akhir" value={formatRupiah(proyeksiSaldoAkhir)} tone={proyeksiSaldoAkhir >= 0 ? "emerald" : "rose"} />
+            </div>
+
+            <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <button onClick={() => requestPrint("final")} className={buttonOutline}>
+                <Printer className="mr-2 h-4 w-4" />
+                Cetak Laporan Final
+              </button>
+              <button onClick={downloadFinalReportPdf} className={buttonPrimary}>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF Laporan Final
+              </button>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-rose-50 p-3 text-rose-700"><Users className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Daftar Santri Belum Lunas</h3>
+                  <p className="mt-1 text-sm text-slate-500">Data ini bisa dipakai untuk follow-up pembayaran sebelum hari-H.</p>
+                </div>
+              </div>
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {finalOutstandingParticipants.length === 0 ? (
+                  <div className="print-table-empty">Semua santri sudah lunas berdasarkan data saat ini.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
+                    <thead><tr><th>Nama santri</th><th>Kelas</th><th>Kamar</th><th>Target</th><th>Sudah bayar</th><th>Sisa</th><th>Status</th><th>Catatan</th></tr></thead>
+                    <tbody>
+                      {finalOutstandingParticipants.map((item) => (
+                        <tr key={item.id} className="border-b border-slate-100">
+                          <td className="cell-name p-3 font-bold text-slate-900">{item.nama}</td>
+                          <td className="cell-class p-3">{item.kelas || "-"}</td>
+                          <td className="cell-note p-3">{item.kamar || "-"}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.targetIuran)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.totalPaid)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.remaining)}</td>
+                          <td className="p-3"><Pill tone={getFinalParticipantTone(item.status)}>{item.status || "-"}</Pill></td>
+                          <td className="cell-note p-3">{item.catatan || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-amber-50 p-3 text-amber-700"><Wallet className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Status Vendor dan Tagihan</h3>
+                  <p className="mt-1 text-sm text-slate-500">Pantau sisa tagihan, DP, pelunasan, dan status setiap vendor.</p>
+                </div>
+              </div>
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {finalVendorStatusRows.length === 0 ? (
+                  <div className="print-table-empty">Belum ada tagihan vendor.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[860px] border-collapse text-sm">
+                    <thead><tr><th>Vendor</th><th>Keperluan</th><th>Jatuh tempo</th><th>Tagihan</th><th>Dibayar</th><th>Sisa</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {finalVendorStatusRows.map((item) => (
+                        <tr key={item.id} className="border-b border-slate-100">
+                          <td className="cell-name p-3 font-bold text-slate-900">{item.vendor || "-"}</td>
+                          <td className="cell-note p-3">{item.nama || "-"}</td>
+                          <td className="cell-date p-3">{item.jatuhTempo || "-"}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.nominal)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.paid)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.remaining)}</td>
+                          <td className="p-3"><Pill tone={getFinalVendorTone(item.status)}>{item.status || "-"}</Pill></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-slate-100 p-3 text-slate-700"><FileText className="h-5 w-5" /></div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Transaksi Tanpa Bukti</h3>
+                  <p className="mt-1 text-sm text-slate-500">Total nominal tanpa bukti: {formatRupiah(finalTotalMissingProofAmount)}.</p>
+                </div>
+              </div>
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {finalTransactionsWithoutProof.length === 0 ? (
+                  <div className="print-table-empty">Semua transaksi iuran dan vendor sudah memiliki bukti.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
+                    <thead><tr><th>Jenis</th><th>Nama / Keperluan</th><th>Tanggal</th><th>Metode</th><th>Nominal</th><th>Catatan</th></tr></thead>
+                    <tbody>
+                      {finalTransactionsWithoutProof.map((item) => (
+                        <tr key={item.id} className="border-b border-slate-100">
+                          <td className="cell-type p-3 font-bold text-slate-900">{item.jenis}</td>
+                          <td className="cell-name p-3"><p className="font-bold text-slate-900">{item.nama}</p><p className="text-xs text-slate-500">{item.detail}</p></td>
+                          <td className="cell-date p-3">{item.tanggal}</td>
+                          <td className="cell-method p-3">{item.metode}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.nominal)}</td>
+                          <td className="cell-note p-3">{item.catatan}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           </div>
         </Section>
