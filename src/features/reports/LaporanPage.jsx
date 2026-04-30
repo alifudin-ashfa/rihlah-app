@@ -110,6 +110,52 @@ const sanitizePdfText = (value) =>
 const rupiahForPdf = (value) => sanitizePdfText(formatRupiah(value));
 
 
+const LOGO_AL_YAQUT_URL = "/logo-al-yaqut.png";
+let cachedLogoDataUrl = "";
+
+const getLogoDataUrl = () =>
+  new Promise((resolve) => {
+    if (cachedLogoDataUrl) {
+      resolve(cachedLogoDataUrl);
+      return;
+    }
+
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0);
+
+        cachedLogoDataUrl = canvas.toDataURL("image/png");
+        resolve(cachedLogoDataUrl);
+      } catch {
+        resolve("");
+      }
+    };
+
+    image.onerror = () => resolve("");
+    image.src = LOGO_AL_YAQUT_URL;
+  });
+
+const addPdfLogo = async (doc) => {
+  const logoDataUrl = await getLogoDataUrl();
+
+  if (!logoDataUrl) return;
+
+  try {
+    doc.addImage(logoDataUrl, "PNG", 174, 10, 20, 20);
+  } catch {
+    // Logo tidak boleh menggagalkan export PDF.
+  }
+};
+
+
 const getFinalParticipantTone = (status) => {
   if (status === "Lunas") return "emerald";
   if (status === "Cicilan") return "amber";
@@ -123,12 +169,14 @@ const getFinalVendorTone = (status) => {
   return "rose";
 };
 
-const addPdfHeader = (doc, title, printedAt, periodLabel) => {
+const addPdfHeader = async (doc, title, printedAt, periodLabel) => {
   doc.setProperties({
     title,
     subject: "Rihlah Pesantren Islam Al Yaqut",
     creator: "Rihlah App",
   });
+
+  await addPdfLogo(doc);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -165,7 +213,7 @@ const addPdfFooter = (doc, printedAt) => {
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
     doc.text(
-      `Rihlah Al Yaqut • ${sanitizePdfText(printedAt)}`,
+      `Pesantren Al Yaqut • ${sanitizePdfText(printedAt)}`,
       14,
       287
     );
@@ -201,7 +249,7 @@ const PrintStyles = () => (
     @media print {
       @page {
         size: A4;
-        margin: 12mm 10mm;
+        margin: 12mm 10mm 18mm;
       }
 
       html,
@@ -237,6 +285,50 @@ const PrintStyles = () => (
       .print-only {
         display: block !important;
       }
+
+
+      .print-header-with-logo {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+      }
+
+      .print-header-text {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+      }
+
+      .print-logo-al-yaqut {
+        width: 54px !important;
+        height: 54px !important;
+        object-fit: contain !important;
+        flex: 0 0 auto !important;
+      }
+
+      .print-footer {
+        display: flex !important;
+        position: fixed !important;
+        right: 10mm !important;
+        bottom: 6mm !important;
+        left: 10mm !important;
+        z-index: 9999 !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        border-top: 1px solid #cbd5e1 !important;
+        padding-top: 4px !important;
+        color: #64748b !important;
+        font-size: 8.5px !important;
+        line-height: 1.2 !important;
+        background: #ffffff !important;
+      }
+
+      .print-footer-page::after {
+        content: "Halaman " counter(page) " dari " counter(pages);
+      }
+
+
 
       .print-section {
         box-shadow: none !important;
@@ -415,6 +507,89 @@ const PrintStyles = () => (
       .audit-vendor-table col:nth-child(6) { width: 13%; }
       .audit-vendor-table col:nth-child(7) { width: 10%; }
       .audit-vendor-table col:nth-child(8) { width: 9%; }
+
+
+      .print-table {
+        min-width: 0 !important;
+      }
+
+      .print-table .inline-flex {
+        min-height: auto !important;
+        border-radius: 5px !important;
+        padding: 2px 4px !important;
+        font-size: 7px !important;
+        line-height: 1.15 !important;
+      }
+
+      .print-final-mode .print-section {
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+
+      .print-final-mode .final-report-section {
+        border: none !important;
+      }
+
+      .print-final-mode .final-report-section > div:first-child {
+        padding: 0 !important;
+      }
+
+      .print-final-mode .final-print-table {
+        min-width: 0 !important;
+        width: 100% !important;
+        table-layout: fixed !important;
+        font-size: 6.6px !important;
+      }
+
+      .print-final-mode .final-print-table th,
+      .print-final-mode .final-print-table td {
+        padding: 3px 3.5px !important;
+        vertical-align: top !important;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+      }
+
+      .print-final-mode .final-print-table th {
+        white-space: normal !important;
+      }
+
+      .print-final-mode .final-print-table .cell-date,
+      .print-final-mode .final-print-table .cell-method,
+      .print-final-mode .final-print-table .cell-type {
+        white-space: normal !important;
+      }
+
+      .print-final-mode .final-print-table .cell-amount {
+        white-space: normal !important;
+        text-align: right !important;
+      }
+
+      .print-final-mode .print-final-optional {
+        display: none !important;
+      }
+
+      .final-participant-table col:nth-child(1) { width: 27%; }
+      .final-participant-table col:nth-child(2) { width: 6%; }
+      .final-participant-table col:nth-child(3) { width: 11%; }
+      .final-participant-table col:nth-child(4) { width: 14%; }
+      .final-participant-table col:nth-child(5) { width: 14%; }
+      .final-participant-table col:nth-child(6) { width: 14%; }
+      .final-participant-table col:nth-child(7) { width: 14%; }
+
+      .final-vendor-table col:nth-child(1) { width: 20%; }
+      .final-vendor-table col:nth-child(2) { width: 20%; }
+      .final-vendor-table col:nth-child(3) { width: 12%; }
+      .final-vendor-table col:nth-child(4) { width: 14%; }
+      .final-vendor-table col:nth-child(5) { width: 14%; }
+      .final-vendor-table col:nth-child(6) { width: 14%; }
+      .final-vendor-table col:nth-child(7) { width: 6%; }
+
+      .final-proof-table col:nth-child(1) { width: 16%; }
+      .final-proof-table col:nth-child(2) { width: 30%; }
+      .final-proof-table col:nth-child(3) { width: 12%; }
+      .final-proof-table col:nth-child(4) { width: 12%; }
+      .final-proof-table col:nth-child(5) { width: 15%; }
+      .final-proof-table col:nth-child(6) { width: 15%; }
 
       .print-table-empty {
         margin-top: 8px !important;
@@ -728,15 +903,17 @@ export default function LaporanPage({ app }) {
   const narasiVendorPdfText = sanitizePdfText(narasiVendorText);
 
   const hasMissingProof = auditProofSummary.totalWithoutProof > 0;
-  const printDate = useMemo(() => formatPrintDate(), []);
+  const [printDate, setPrintDate] = useState(formatPrintDate());
 
   const requestPrint = (scope) => {
-    if ((scope === "audit" || scope === "final") && !canEdit) return;
-    setPrintScope(scope);
+  if ((scope === "audit" || scope === "final") && !canEdit) return;
 
-    window.requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        window.print();
+  setPrintDate(formatPrintDate());
+  setPrintScope(scope);
+
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      window.print();
       }, 80);
     });
   };
@@ -768,10 +945,10 @@ export default function LaporanPage({ app }) {
   const showFinalSection =
     canEdit && (printScope === "final" || (!printScope && laporanView === "final"));
 
-  const downloadReportPdf = () => {
+  const downloadReportPdf = async () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = addPdfHeader(doc, "Laporan Keuangan Kegiatan", generatedAt, periodLabel);
+    let y = await addPdfHeader(doc, "Laporan Keuangan Kegiatan", generatedAt, periodLabel);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -843,12 +1020,12 @@ export default function LaporanPage({ app }) {
     doc.save(`laporan-keuangan-rihlah-${periodFileSuffix}.pdf`);
   };
 
-  const downloadFinalReportPdf = () => {
+  const downloadFinalReportPdf = async () => {
     if (!canEdit) return;
 
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = addPdfHeader(
+    let y = await addPdfHeader(
       doc,
       "Laporan Final Panitia",
       generatedAt,
@@ -1034,12 +1211,12 @@ export default function LaporanPage({ app }) {
     doc.save(`laporan-final-panitia-rihlah-${formatFileDate()}.pdf`);
   };
 
-  const downloadAuditPdf = () => {
+  const downloadAuditPdf = async () => {
     if (!canEdit) return;
 
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt, periodLabel);
+    let y = await addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt, periodLabel);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -1212,26 +1389,42 @@ export default function LaporanPage({ app }) {
   };
 
   return (
-    <div className="print-root print-compact space-y-4 sm:space-y-6">
+    <div className={`print-root print-compact space-y-4 sm:space-y-6 ${printScope === "final" ? "print-final-mode" : ""}`}>
       <PrintStyles />
 
       <div className="print-only border-b border-slate-300 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-          Rihlah Pesantren Islam Al Yaqut
-        </p>
-        <h1 className="mt-2 text-2xl font-extrabold text-slate-950">
-          {printScope === "audit"
-            ? "Lampiran Audit Bukti Pembayaran"
-            : printScope === "final"
-              ? "Laporan Final Panitia"
-              : "Laporan Keuangan Kegiatan"}
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Dicetak pada {printDate}
-        </p>
-        <p className="mt-1 text-sm text-slate-600">
-          Periode: {periodLabel}
-        </p>
+        <div className="print-header-with-logo">
+          <div className="print-header-text">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Rihlah Pesantren Islam Al Yaqut
+            </p>
+            <h1 className="mt-2 text-2xl font-extrabold text-slate-950">
+              {printScope === "audit"
+                ? "Lampiran Audit Bukti Pembayaran"
+                : printScope === "final"
+                  ? "Laporan Final Panitia"
+                  : "Laporan Keuangan Kegiatan"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Dicetak pada {printDate}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Periode: {periodLabel}
+            </p>
+          </div>
+
+          <img
+            src={LOGO_AL_YAQUT_URL}
+            alt="Logo Al Yaqut"
+            className="print-logo-al-yaqut"
+          />
+        </div>
+      </div>
+
+
+      <div className="print-only print-footer">
+        <span>Pesantren Al Yaqut • {printDate}</span>
+        <span className="print-footer-page" />
       </div>
 
       <div className="no-print rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1464,7 +1657,7 @@ export default function LaporanPage({ app }) {
           id="laporan-final"
           title="Laporan Final Panitia"
           subtitle="Ringkasan akhir untuk rapat panitia dan pimpinan sebelum Rihlah 6-7 Mei 2026."
-          className="print-section print-audit-section"
+          className="print-section print-audit-section final-report-section"
         >
           <div className="space-y-5">
             <InlineBanner
@@ -1507,8 +1700,18 @@ export default function LaporanPage({ app }) {
                 {finalOutstandingParticipants.length === 0 ? (
                   <div className="print-table-empty">Semua santri sudah lunas berdasarkan data saat ini.</div>
                 ) : (
-                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
-                    <thead><tr><th>Nama santri</th><th>Kelas</th><th>Kamar</th><th>Target</th><th>Sudah bayar</th><th>Sisa</th><th>Status</th><th>Catatan</th></tr></thead>
+                  <table className="print-table final-print-table final-participant-table w-full min-w-[900px] border-collapse text-sm">
+                    <colgroup>
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col className="print-final-optional" />
+                    </colgroup>
+                    <thead><tr><th>Nama santri</th><th>Kelas</th><th>Kamar</th><th>Target</th><th>Sudah bayar</th><th>Sisa</th><th>Status</th><th className="print-final-optional">Catatan</th></tr></thead>
                     <tbody>
                       {finalOutstandingParticipants.map((item) => (
                         <tr key={item.id} className="border-b border-slate-100">
@@ -1519,7 +1722,7 @@ export default function LaporanPage({ app }) {
                           <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.totalPaid)}</td>
                           <td className="cell-amount p-3 text-right font-bold">{formatRupiah(item.remaining)}</td>
                           <td className="p-3"><Pill tone={getFinalParticipantTone(item.status)}>{item.status || "-"}</Pill></td>
-                          <td className="cell-note p-3">{item.catatan || "-"}</td>
+                          <td className="cell-note p-3 print-final-optional">{item.catatan || "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1540,7 +1743,16 @@ export default function LaporanPage({ app }) {
                 {finalVendorStatusRows.length === 0 ? (
                   <div className="print-table-empty">Belum ada tagihan vendor.</div>
                 ) : (
-                  <table className="print-table w-full min-w-[860px] border-collapse text-sm">
+                  <table className="print-table final-print-table final-vendor-table w-full min-w-[860px] border-collapse text-sm">
+                    <colgroup>
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                    </colgroup>
                     <thead><tr><th>Vendor</th><th>Keperluan</th><th>Jatuh tempo</th><th>Tagihan</th><th>Dibayar</th><th>Sisa</th><th>Status</th></tr></thead>
                     <tbody>
                       {finalVendorStatusRows.map((item) => (
@@ -1572,7 +1784,15 @@ export default function LaporanPage({ app }) {
                 {finalTransactionsWithoutProof.length === 0 ? (
                   <div className="print-table-empty">Semua transaksi iuran dan vendor sudah memiliki bukti.</div>
                 ) : (
-                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
+                  <table className="print-table final-print-table final-proof-table w-full min-w-[900px] border-collapse text-sm">
+                    <colgroup>
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                      <col />
+                    </colgroup>
                     <thead><tr><th>Jenis</th><th>Nama / Keperluan</th><th>Tanggal</th><th>Metode</th><th>Nominal</th><th>Catatan</th></tr></thead>
                     <tbody>
                       {finalTransactionsWithoutProof.map((item) => (
