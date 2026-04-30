@@ -315,6 +315,8 @@ export default function HomePage({ app }) {
     warnings,
     financeHealth,
     exportBackup,
+    exportFinalBackup,
+    backupSummary,
     importBackup,
     exportCsvReport,
     loadSampleData,
@@ -561,6 +563,18 @@ export default function HomePage({ app }) {
       : "Siap";
   const readinessDoneCount = readinessItems.filter((item) => item.status === "Siap").length;
   const readinessPercent = safePercent(readinessDoneCount, readinessItems.length);
+
+  const backupParticipantPaymentCount = Array.isArray(participantPaymentHistory)
+  ? participantPaymentHistory.length
+  : 0;
+
+const backupExpenseCount = Array.isArray(expenseRows)
+  ? expenseRows.length
+  : 0;
+
+const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
+  ? vendorPaymentRows.length
+  : 0;
 
   const resetDateFilter = () => {
     setFilterStartDate("");
@@ -1109,28 +1123,82 @@ export default function HomePage({ app }) {
       >
         <div className="space-y-4">
           {canEdit ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <button onClick={exportCsvReport} className={buttonOutline}>
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </button>
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <button onClick={exportCsvReport} className={buttonOutline}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </button>
 
-              <button onClick={exportBackup} className={buttonOutline}>
-                <Database className="mr-2 h-4 w-4" />
-                Backup JSON
-              </button>
+                <button onClick={exportBackup} className={buttonOutline}>
+                  <Database className="mr-2 h-4 w-4" />
+                  Backup JSON
+                </button>
 
-              <button
-                onClick={() => importInputRef.current?.click()}
-                className={buttonOutline}
-              >
-                Import JSON
-              </button>
+                <button onClick={exportFinalBackup} className={buttonPrimary}>
+                  <Database className="mr-2 h-4 w-4" />
+                  Backup Final
+                </button>
 
-              <NavLink to="/laporan" className={buttonOutline}>
-                <FileText className="mr-2 h-4 w-4" />
-                Buka Laporan
-              </NavLink>
+                <button
+                  onClick={() => importInputRef.current?.click()}
+                  className={buttonOutline}
+                >
+                  Import JSON
+                </button>
+
+                <NavLink to="/laporan" className={buttonOutline}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Buka Laporan
+                </NavLink>
+              </div>
+
+              <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="font-bold text-sky-900">
+                      Backup final sebelum hari-H
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-sky-700">
+                      Simpan backup setelah data santri, vendor, bukti pembayaran, Buku Kas, dan Laporan selesai dicek.
+                    </p>
+                  </div>
+                  <button onClick={exportFinalBackup} className={buttonPrimary}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Buat Backup Final
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <MiniStat
+                    label="Santri"
+                    value={String(backupSummary?.jumlahSantri ?? jumlahSantri ?? 0)}
+                    tone="sky"
+                  />
+
+                  <MiniStat
+                    label="Pembayaran iuran"
+                    value={String(
+                      backupSummary?.jumlahPembayaranIuran ?? backupParticipantPaymentCount
+                    )}
+                    tone="emerald"
+                  />
+
+                  <MiniStat
+                    label="Tagihan vendor"
+                    value={String(backupSummary?.jumlahTagihanVendor ?? backupExpenseCount)}
+                    tone="amber"
+                  />
+
+                  <MiniStat
+                    label="Pembayaran vendor"
+                    value={String(
+                      backupSummary?.jumlahPembayaranVendor ?? backupVendorPaymentCount
+                    )}
+                    tone="violet"
+                  />
+                </div>
+              </div>
             </div>
           ) : (
             <InlineBanner
