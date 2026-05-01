@@ -55,7 +55,8 @@ function formatFileDate() {
 export default function SantriPage({ app }) {
   const {
     config,
-    canEdit,
+    canManageData,
+    isFinalLocked,
     expenseForm,
     setExpenseForm,
     editingExpenseId,
@@ -326,6 +327,14 @@ export default function SantriPage({ app }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {isFinalLocked ? (
+        <InlineBanner
+          title="Mode Final Aktif"
+          text="Data santri dan pembayaran iuran sedang dikunci. Export dan lihat data tetap bisa digunakan."
+          tone="emerald"
+        />
+      ) : null}
+
       <Section id="santri" title="Rekap Santri dan Pembayaran Iuran">
         <div className="space-y-4 sm:space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -446,7 +455,7 @@ export default function SantriPage({ app }) {
             </div>
           </div>
 
-          {canEdit ? (
+          {canManageData ? (
             <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6">
               <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
                 <div className="flex items-start justify-between gap-4">
@@ -573,7 +582,7 @@ export default function SantriPage({ app }) {
                 ) : null}
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  {canEdit ? (
+                  {canManageData ? (
                     <>
                       <button onClick={addOrUpdateParticipant} className={buttonPrimary}>
                         <PlusCircle className="mr-2 h-4 w-4" />
@@ -773,7 +782,7 @@ export default function SantriPage({ app }) {
                 ) : null}
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  {canEdit ? (
+                  {canManageData ? (
                     <button onClick={addParticipantPayment} className={buttonPrimary}>
                       <ArrowDownCircle className="mr-2 h-4 w-4" />
                       Simpan pembayaran
@@ -943,7 +952,7 @@ export default function SantriPage({ app }) {
                                 </p>
 
                                 <div className="mt-3 flex flex-col gap-2">
-                                  {canEdit ? (
+                                  {canManageData ? (
                                     <>
                                       <button
                                         onClick={() =>
@@ -1038,7 +1047,7 @@ export default function SantriPage({ app }) {
                                           )}
                                         </div>
 
-                                        {canEdit ? (
+                                        {canManageData ? (
                                           <button
                                             onClick={() =>
                                               removeParticipantPayment(
@@ -1075,7 +1084,7 @@ export default function SantriPage({ app }) {
                           {isExpanded ? "Tutup detail" : "Detail"}
                         </button>
 
-                        {canEdit ? (
+                        {canManageData ? (
                           <button
                             onClick={() => removeParticipant(item.id)}
                             className={smallButton}

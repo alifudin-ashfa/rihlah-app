@@ -34,6 +34,30 @@ export function useRihlahApp() {
   const remoteReadyRef = useRef(!isSupabaseConfigured);
   const saveTimerRef = useRef(null);
   const lastSavedPayloadRef = useRef("");
+  const isFinalLocked = Boolean(configState.config?.finalisasiData?.terkunci);
+  const canManageData = Boolean(ui.canEdit && !isFinalLocked);
+
+  const guardFinalLock = (actionName, action) => (...args) => {
+    if (isFinalLocked) {
+      ui.showToast(
+        `Data final sedang dikunci. Buka kunci terlebih dahulu untuk ${actionName}.`,
+        "amber"
+      );
+      return undefined;
+    }
+
+    return action?.(...args);
+  };
+
+  const lockFinalData = () => {
+    const locked = configState.lockFinalData();
+    if (locked) ui.showToast("Mode Final Aktif. Data utama berhasil dikunci.", "emerald");
+  };
+
+  const unlockFinalData = () => {
+    const unlocked = configState.unlockFinalData();
+    if (unlocked) ui.showToast("Kunci data final dibuka. Data bisa diedit kembali.", "amber");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -123,15 +147,43 @@ export function useRihlahApp() {
 
   return {
     config: configState.config,
-    handleConfigChange: configState.handleConfigChange,
+    handleConfigChange: guardFinalLock("mengubah pengaturan kegiatan", configState.handleConfigChange),
     laporanView,
     setLaporanView,
     databaseStatus,
     isSupabaseConfigured,
+    isFinalLocked,
+    canManageData,
+    lockFinalData,
+    unlockFinalData,
     ...ui,
+    canEdit: ui.canEdit,
     ...participantsDomain,
+    addOrUpdateParticipant: guardFinalLock("menyimpan data santri", participantsDomain.addOrUpdateParticipant),
+    editParticipant: guardFinalLock("mengedit data santri", participantsDomain.editParticipant),
+    removeParticipant: guardFinalLock("menghapus data santri", participantsDomain.removeParticipant),
+    resetParticipantForm: guardFinalLock("membatalkan edit santri", participantsDomain.resetParticipantForm),
+    addParticipantPayment: guardFinalLock("mencatat pembayaran santri", participantsDomain.addParticipantPayment),
+    focusParticipantPaymentForm: guardFinalLock("mencatat pembayaran santri", participantsDomain.focusParticipantPaymentForm),
+    removeParticipantPayment: guardFinalLock("menghapus pembayaran santri", participantsDomain.removeParticipantPayment),
+    applyDefaultTargetToAll: guardFinalLock("menerapkan target iuran", participantsDomain.applyDefaultTargetToAll),
     ...vendorsDomain,
+    addOrUpdateExpense: guardFinalLock("menyimpan tagihan vendor", vendorsDomain.addOrUpdateExpense),
+    editExpense: guardFinalLock("mengedit tagihan vendor", vendorsDomain.editExpense),
+    removeExpense: guardFinalLock("menghapus tagihan vendor", vendorsDomain.removeExpense),
+    addOrUpdateIncome: guardFinalLock("menyimpan pemasukan lain", vendorsDomain.addOrUpdateIncome),
+    editIncome: guardFinalLock("mengedit pemasukan lain", vendorsDomain.editIncome),
+    removeIncome: guardFinalLock("menghapus pemasukan lain", vendorsDomain.removeIncome),
+    handleVendorProofUpload: guardFinalLock("mengunggah bukti vendor", vendorsDomain.handleVendorProofUpload),
+    addVendorPayment: guardFinalLock("mencatat pembayaran vendor", vendorsDomain.addVendorPayment),
+    removeVendorPayment: guardFinalLock("menghapus pembayaran vendor", vendorsDomain.removeVendorPayment),
+    resetExpenseForm: guardFinalLock("membatalkan edit tagihan vendor", vendorsDomain.resetExpenseForm),
+    resetIncomeForm: guardFinalLock("membatalkan edit pemasukan lain", vendorsDomain.resetIncomeForm),
+    resetVendorPaymentForm: guardFinalLock("membatalkan form pembayaran vendor", vendorsDomain.resetVendorPaymentForm),
     ...metrics,
     ...backupAndImport,
+    importBackup: guardFinalLock("mengimpor data", backupAndImport.importBackup),
+    loadSampleData: guardFinalLock("memuat data contoh", backupAndImport.loadSampleData),
+    resetAllData: guardFinalLock("mereset data", backupAndImport.resetAllData),
   };
 }

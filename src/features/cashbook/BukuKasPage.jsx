@@ -131,6 +131,7 @@ export default function BukuKasPage({ app }) {
     vendorPayments = [],
     otherIncomes = [],
     isViewerMode = false,
+    isFinalLocked = false,
   } = app || {};
 
   const [filters, setFilters] = useState({
@@ -197,6 +198,12 @@ export default function BukuKasPage({ app }) {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      {isFinalLocked ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+          Mode Final Aktif. Buku Kas tetap bisa dilihat dan diekspor, tetapi data sumber sudah dikunci.
+        </div>
+      ) : null}
+
       <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>

@@ -124,6 +124,11 @@ const emptyConfig = {
   akunTujuan: "Bendahara Kegiatan",
   rekeningTujuan: "",
   catatanKegiatan: "",
+  finalisasiData: {
+    terkunci: false,
+    dikunciPada: "",
+    dibukaPada: "",
+  },
 };
 
 const createBlankState = () => ({
@@ -134,14 +139,23 @@ const createBlankState = () => ({
   participants: [],
 });
 
-const normalizeConfig = (config = {}) => ({
-  namaKegiatan: config.namaKegiatan || emptyConfig.namaKegiatan,
-  jumlahPembimbing: clampMin(config.jumlahPembimbing ?? emptyConfig.jumlahPembimbing),
-  iuranDefaultSantri: clampMin(config.iuranDefaultSantri ?? emptyConfig.iuranDefaultSantri),
-  akunTujuan: config.akunTujuan || emptyConfig.akunTujuan,
-  rekeningTujuan: config.rekeningTujuan || "",
-  catatanKegiatan: config.catatanKegiatan || "",
-});
+const normalizeConfig = (config = {}) => {
+  const finalisasiData = config.finalisasiData || {};
+
+  return {
+    namaKegiatan: config.namaKegiatan || emptyConfig.namaKegiatan,
+    jumlahPembimbing: clampMin(config.jumlahPembimbing ?? emptyConfig.jumlahPembimbing),
+    iuranDefaultSantri: clampMin(config.iuranDefaultSantri ?? emptyConfig.iuranDefaultSantri),
+    akunTujuan: config.akunTujuan || emptyConfig.akunTujuan,
+    rekeningTujuan: config.rekeningTujuan || "",
+    catatanKegiatan: config.catatanKegiatan || "",
+    finalisasiData: {
+      terkunci: Boolean(finalisasiData.terkunci),
+      dikunciPada: finalisasiData.dikunciPada || "",
+      dibukaPada: finalisasiData.dibukaPada || "",
+    },
+  };
+};
 
 const normalizeParticipantPayment = (payment = {}) => ({
   id: payment.id || createId(),

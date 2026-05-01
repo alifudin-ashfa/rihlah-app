@@ -31,7 +31,8 @@ const hasVendorProof = (payment) =>
 
 export default function VendorPage({ app }) {
   const {
-    canEdit,
+    canManageData,
+    isFinalLocked,
     expenseForm,
     setExpenseForm,
     editingExpenseId,
@@ -292,19 +293,19 @@ export default function VendorPage({ app }) {
     <Section
       title="Tagihan Vendor"
       subtitle={
-        canEdit
+        canManageData
           ? "Daftar kebutuhan biaya atau anggaran yang akan dibayar ke vendor."
           : undefined
       }
     >
       <div
         className={
-          canEdit
+          canManageData
             ? "grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]"
             : "grid gap-6"
         }
       >
-        {canEdit ? (
+        {canManageData ? (
           <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -432,13 +433,13 @@ export default function VendorPage({ app }) {
             ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {canEdit ? (
+              {canManageData ? (
                 <button onClick={addOrUpdateExpense} className={buttonPrimary}>
                   {editingExpenseId ? "Simpan perubahan" : "Tambah tagihan"}
                 </button>
               ) : null}
 
-              {canEdit && editingExpenseId ? (
+              {canManageData && editingExpenseId ? (
                 <button onClick={resetExpenseForm} className={buttonOutline}>
                   Batal edit
                 </button>
@@ -554,7 +555,7 @@ export default function VendorPage({ app }) {
                           {isExpanded ? "Tutup detail" : "Detail"}
                         </button>
 
-                        {canEdit ? (
+                        {canManageData ? (
                           <>
                             <button
                               onClick={() => {
@@ -841,7 +842,7 @@ export default function VendorPage({ app }) {
                                         {renderProofAction(payment, proofPreviewUrl)}
                                       </div>
 
-                                      {canEdit ? (
+                                      {canManageData ? (
                                         <button
                                           onClick={() =>
                                             removeVendorPayment(payment)
@@ -860,7 +861,7 @@ export default function VendorPage({ app }) {
                           </div>
                         </div>
 
-                        {canEdit ? (
+                        {canManageData ? (
                           <div className="w-full rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                             <h3 className="text-xl font-bold text-slate-900">
                               Aksi Cepat
@@ -906,19 +907,19 @@ export default function VendorPage({ app }) {
     <Section
       title="Pembayaran Vendor"
       subtitle={
-        canEdit
+        canManageData
           ? "Catat DP, cicilan, atau pelunasan dan simpan bukti transfer seperlunya."
           : undefined
       }
     >
       <div
         className={
-          canEdit
+          canManageData
             ? "grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[400px_minmax(0,1fr)]"
             : "grid gap-6"
         }
       >
-        {canEdit ? (
+        {canManageData ? (
           <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -1112,7 +1113,7 @@ export default function VendorPage({ app }) {
                   <label className="text-sm font-medium text-slate-700">
                     Bukti transfer
                   </label>
-                  {canEdit ? (
+                  {canManageData ? (
                     <input
                       ref={paymentProofInputRef}
                       type="file"
@@ -1143,7 +1144,7 @@ export default function VendorPage({ app }) {
             ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {canEdit ? (
+              {canManageData ? (
                 <>
                   <button onClick={addVendorPayment} className={buttonPrimary}>
                     <ArrowUpCircle className="mr-2 h-4 w-4" />
@@ -1326,7 +1327,7 @@ export default function VendorPage({ app }) {
                         {renderProofAction(item, proofPreviewUrl)}
                       </div>
 
-                      {canEdit ? (
+                      {canManageData ? (
                         <button
                           onClick={() => removeVendorPayment(item)}
                           className={smallButton}
@@ -1348,7 +1349,14 @@ export default function VendorPage({ app }) {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {canEdit ? vendorGuide : null}
+      {isFinalLocked ? (
+        <InlineBanner
+          title="Mode Final Aktif"
+          text="Data vendor, tagihan, dan pembayaran vendor sedang dikunci. Export dan lihat data tetap bisa digunakan."
+          tone="emerald"
+        />
+      ) : null}
+      {canManageData ? vendorGuide : null}
 
       <div className="flex flex-wrap gap-2">
         <button

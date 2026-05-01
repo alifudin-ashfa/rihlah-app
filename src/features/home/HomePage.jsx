@@ -288,6 +288,10 @@ export default function HomePage({ app }) {
   const {
     config,
     canEdit,
+    canManageData,
+    isFinalLocked,
+    lockFinalData,
+    unlockFinalData,
     otherIncomes,
     participantPaymentHistory = [],
     vendorPaymentRows = [],
@@ -583,6 +587,14 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      {isFinalLocked ? (
+        <InlineBanner
+          title="Mode Final Aktif"
+          text="Data sudah dikunci. Tambah, edit, hapus, import, reset, dan muat data contoh dinonaktifkan. Export, backup, Buku Kas, dan laporan tetap bisa digunakan."
+          tone="emerald"
+        />
+      ) : null}
+
       <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-gradient-to-br from-sky-600 via-sky-700 to-slate-950 p-4 text-white shadow-xl sm:p-6 lg:p-8">
         <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] 2xl:items-start">
           <div className="min-w-0">
@@ -1117,7 +1129,7 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
         title="Utilitas Sistem"
         subtitle={
           canEdit
-            ? "Simpan cadangan data dan kelola file laporan."
+            ? "Simpan cadangan data, kelola file laporan, dan kunci data final."
             : "Utilitas hanya tersedia untuk admin/bendahara."
         }
       >
@@ -1143,6 +1155,8 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
                 <button
                   onClick={() => importInputRef.current?.click()}
                   className={buttonOutline}
+                  disabled={!canManageData}
+                  title={isFinalLocked ? "Data final sedang dikunci." : undefined}
                 >
                   Import JSON
                 </button>
@@ -1199,6 +1213,40 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
                   />
                 </div>
               </div>
+
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isFinalLocked
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="font-bold text-slate-900">
+                      Mode finalisasi data
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      {isFinalLocked
+                        ? `Mode Final Aktif sejak ${config.finalisasiData?.dikunciPada ? new Date(config.finalisasiData.dikunciPada).toLocaleString("id-ID") : "-"}. Data utama tidak bisa diubah sampai kunci dibuka.`
+                        : "Aktifkan setelah backup final, laporan final, dan audit selesai dicek."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+                    {isFinalLocked ? (
+                      <button onClick={unlockFinalData} className={buttonOutline}>
+                        Buka Kunci Data
+                      </button>
+                    ) : (
+                      <button onClick={lockFinalData} className={buttonPrimary}>
+                        <Database className="mr-2 h-4 w-4" />
+                        Kunci Data Final
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <InlineBanner
@@ -1214,6 +1262,7 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
             accept="application/json"
             className="hidden"
             onChange={importBackup}
+            disabled={isFinalLocked}
           />
 
           {canEdit ? (
@@ -1229,14 +1278,16 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
 
           {canEdit && homeUtilitiesOpen ? (
             <div className="grid gap-3 lg:grid-cols-2">
-              <button onClick={loadSampleData} className={buttonOutline}>
+              <button onClick={loadSampleData} className={buttonOutline} disabled={!canManageData} title={isFinalLocked ? "Data final sedang dikunci." : undefined}>
                 <CheckCircle2 className="mr-2 h-4 w-4" />
                 Muat Data Contoh
               </button>
 
               <button
                 onClick={resetAllData}
-                className="inline-flex items-center justify-center rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100"
+                disabled={!canManageData}
+                title={isFinalLocked ? "Data final sedang dikunci." : undefined}
+                className="inline-flex items-center justify-center rounded-xl border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reset Data
