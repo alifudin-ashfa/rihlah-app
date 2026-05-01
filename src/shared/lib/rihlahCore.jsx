@@ -55,6 +55,39 @@ const clampMin = (value, min = 0) => Math.max(toNumber(value), min);
 const getToday = () => new Date().toISOString().slice(0, 10);
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const normalizeActivityLogTone = (tone = "info") =>
+  ["info", "important", "danger", "success"].includes(tone) ? tone : "info";
+
+const createActivityLogEntry = ({
+  type = "system",
+  title = "Aktivitas",
+  description = "",
+  tone = "info",
+  at = "",
+} = {}) => ({
+  id: createId(),
+  at: at || new Date().toISOString(),
+  type,
+  title,
+  description,
+  tone: normalizeActivityLogTone(tone),
+});
+
+const normalizeActivityLogEntry = (entry = {}) => ({
+  id: entry.id || createId(),
+  at: entry.at || entry.createdAt || new Date().toISOString(),
+  type: entry.type || "system",
+  title: entry.title || "Aktivitas",
+  description: entry.description || "",
+  tone: normalizeActivityLogTone(entry.tone),
+});
+
+const normalizeActivityLogs = (logs = []) =>
+  (Array.isArray(logs) ? logs : [])
+    .map(normalizeActivityLogEntry)
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+    .slice(0, 200);
+
 const confirmDestructiveAction = ({
   title = "Konfirmasi aksi",
   message = "Aksi ini tidak bisa dibatalkan.",
@@ -137,6 +170,7 @@ const createBlankState = () => ({
   otherIncomes: [],
   vendorPayments: [],
   participants: [],
+  activityLogs: [],
 });
 
 const normalizeConfig = (config = {}) => {
@@ -245,6 +279,7 @@ const normalizeState = (rawState) => {
     participants: Array.isArray(safeState.participants)
       ? safeState.participants.map((item) => normalizeParticipant(item, config.iuranDefaultSantri))
       : [],
+    activityLogs: normalizeActivityLogs(safeState.activityLogs),
   };
 };
 
@@ -593,6 +628,9 @@ export {
   clampMin,
   getToday,
   createId,
+  createActivityLogEntry,
+  normalizeActivityLogEntry,
+  normalizeActivityLogs,
   confirmDestructiveAction,
   normalizeFriendlyError,
   isSantriIncome,

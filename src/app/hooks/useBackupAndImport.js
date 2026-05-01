@@ -2,6 +2,7 @@ import {
   LEGACY_KEYS,
   STORAGE_KEY,
   confirmDestructiveAction,
+  createActivityLogEntry,
   createBlankState,
   createSampleState,
   csvEscape,
@@ -47,6 +48,7 @@ function buildBackupPayload({
   config,
   participantsDomain,
   vendorsDomain,
+  activityLogs = [],
 }) {
   const participants = participantsDomain.participants;
   const expenses = vendorsDomain.expenses;
@@ -70,6 +72,7 @@ function buildBackupPayload({
     otherIncomes,
     vendorPayments,
     participants,
+    activityLogs,
   };
 }
 
@@ -114,6 +117,9 @@ export function useBackupAndImport({
   vendorsDomain,
   metrics,
   showToast,
+  activityLogs = [],
+  setActivityLogs,
+  recordActivity,
 }) {
   const applyState = (nextState) => {
     const normalized = normalizeState(nextState);
@@ -123,6 +129,9 @@ export function useBackupAndImport({
     vendorsDomain.setOtherIncomes(normalized.otherIncomes);
     vendorsDomain.setVendorPayments(normalized.vendorPayments);
     participantsDomain.setParticipants(normalized.participants);
+    if (typeof setActivityLogs === "function") {
+      setActivityLogs(normalized.activityLogs || []);
+    }
 
     vendorsDomain.resetExpenseForm();
     vendorsDomain.resetIncomeForm();
@@ -138,6 +147,7 @@ export function useBackupAndImport({
       config,
       participantsDomain,
       vendorsDomain,
+      activityLogs,
     });
 
     const filename = `backup-rihlah-al-yaqut-${formatBackupTimestamp()}.json`;
@@ -152,6 +162,13 @@ export function useBackupAndImport({
       `Backup berhasil dibuat: ${payload.backupSummary.jumlahSantri} santri, ${payload.backupSummary.jumlahTagihanVendor} tagihan vendor, ${payload.backupSummary.jumlahPembayaranIuran} pembayaran iuran.`,
       "emerald"
     );
+
+    recordActivity?.({
+      type: "backup",
+      title: "Backup JSON dibuat",
+      description: `${payload.backupSummary.jumlahSantri} santri, ${payload.backupSummary.jumlahTagihanVendor} tagihan vendor, dan ${payload.backupSummary.jumlahPembayaranIuran} pembayaran iuran masuk backup.`,
+      tone: "info",
+    });
   };
 
   const exportFinalBackup = () => {
@@ -160,6 +177,7 @@ export function useBackupAndImport({
       config,
       participantsDomain,
       vendorsDomain,
+      activityLogs,
     });
 
     const filename = `backup-final-rihlah-al-yaqut-${formatBackupTimestamp()}.json`;
@@ -174,6 +192,13 @@ export function useBackupAndImport({
       `Backup final berhasil dibuat: ${payload.backupSummary.jumlahSantri} santri, ${payload.backupSummary.jumlahTagihanVendor} tagihan vendor, ${payload.backupSummary.jumlahPembayaranVendor} pembayaran vendor.`,
       "emerald"
     );
+
+    recordActivity?.({
+      type: "backup-final",
+      title: "Backup final dibuat",
+      description: `${payload.backupSummary.jumlahSantri} santri, ${payload.backupSummary.jumlahTagihanVendor} tagihan vendor, dan ${payload.backupSummary.jumlahPembayaranVendor} pembayaran vendor masuk backup final.`,
+      tone: "important",
+    });
   };
 
   const importBackup = async (event) => {
@@ -216,6 +241,17 @@ export function useBackupAndImport({
       }
 
       applyState(normalized);
+      const restoreLog = createActivityLogEntry({
+        type: "import",
+        title: "Restore backup",
+        description: `${summary.jumlahSantri} santri, ${summary.jumlahPembayaranIuran} pembayaran iuran, ${summary.jumlahTagihanVendor} tagihan vendor, dan ${summary.jumlahPembayaranVendor} pembayaran vendor direstore dari file backup.`,
+        tone: "important",
+      });
+
+      if (typeof setActivityLogs === "function") {
+        setActivityLogs((prev) => [restoreLog, ...(Array.isArray(prev) ? prev : [])].slice(0, 200));
+      }
+
       showToast("Backup berhasil direstore.", "emerald");
     } catch (error) {
       showToast(error.message || "File backup tidak valid.", "rose");
@@ -331,6 +367,13 @@ export function useBackupAndImport({
       csv,
       "text/csv;charset=utf-8"
     );
+
+    recordActivity?.({
+      type: "export",
+      title: "Export CSV laporan",
+      description: "Laporan administrasi keuangan diexport ke CSV.",
+      tone: "info",
+    });
   };
 
   const loadSampleData = () => {
@@ -343,6 +386,14 @@ export function useBackupAndImport({
     if (!confirmed) return;
 
     applyState(createSampleState());
+
+    recordActivity?.({
+      type: "sample-data",
+      title: "Muat data contoh",
+      description: "Data aplikasi diganti dengan data contoh untuk simulasi.",
+      tone: "important",
+    });
+
     showToast("Data contoh berhasil dimuat.", "emerald");
   };
 
@@ -360,6 +411,18 @@ export function useBackupAndImport({
     Object.values(LEGACY_KEYS).forEach((key) => localStorage.removeItem(key));
 
     applyState(createBlankState());
+
+    const resetLog = createActivityLogEntry({
+      type: "reset",
+      title: "Reset semua data",
+      description: "Seluruh data aplikasi direset menjadi kosong.",
+      tone: "danger",
+    });
+
+    if (typeof setActivityLogs === "function") {
+      setActivityLogs([resetLog]);
+    }
+
     showToast("Semua data berhasil direset.", "emerald");
   };
 

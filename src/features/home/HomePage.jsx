@@ -228,6 +228,51 @@ function ProgressPanel({
   );
 }
 
+function formatActivityLogDate(value) {
+  if (!value) return "-";
+
+  try {
+    return new Intl.DateTimeFormat("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function getActivityToneClass(tone = "info") {
+  const map = {
+    success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    important: "border-amber-200 bg-amber-50 text-amber-800",
+    danger: "border-rose-200 bg-rose-50 text-rose-800",
+    info: "border-sky-200 bg-sky-50 text-sky-800",
+  };
+
+  return map[tone] || map.info;
+}
+
+function ActivityLogItem({ item }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${getActivityToneClass(item.tone)}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900">{item.title}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            {item.description || "-"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-slate-600">
+          {formatActivityLogDate(item.at)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function ChecklistItem({ title, description, status = "Perlu Dicek", actionTo, actionLabel }) {
   const toneMap = {
     Siap: {
@@ -290,6 +335,7 @@ export default function HomePage({ app }) {
     canEdit,
     canManageData,
     isFinalLocked,
+    activityLogs = [],
     lockFinalData,
     unlockFinalData,
     otherIncomes,
@@ -1247,6 +1293,38 @@ const backupVendorPaymentCount = Array.isArray(vendorPaymentRows)
                   </div>
                 </div>
               </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="font-bold text-slate-900">
+                      Riwayat aktivitas terakhir
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      Catatan otomatis untuk perubahan data penting, backup, import, reset, dan kunci data.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                    {activityLogs.length} aktivitas
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {activityLogs.length === 0 ? (
+                    <InlineBanner
+                      title="Belum ada aktivitas"
+                      text="Riwayat aktivitas akan muncul setelah ada perubahan data atau proses backup/import."
+                      tone="sky"
+                    />
+                  ) : (
+                    activityLogs.slice(0, 8).map((item) => (
+                      <ActivityLogItem key={item.id} item={item} />
+                    ))
+                  )}
+                </div>
+              </div>
+
+
             </div>
           ) : (
             <InlineBanner

@@ -14,7 +14,7 @@ import {
 } from "../../shared/lib/rihlahCore";
 import { useVendorPayments } from "./useVendorPayments";
 
-export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initialVendorPayments, showToast, paymentProofInputRef }) {
+export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initialVendorPayments, showToast, paymentProofInputRef, recordActivity }) {
   const [expenses, setExpenses] = useState(initialExpenses);
   const [otherIncomes, setOtherIncomes] = useState(initialOtherIncomes);
   const [vendorPayments, setVendorPayments] = useState(initialVendorPayments);
@@ -136,13 +136,23 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
       catatan: expenseForm.catatan.trim(),
     });
 
-    if (editingExpenseId) {
+    const isEditing = Boolean(editingExpenseId);
+
+    if (isEditing) {
       setExpenses((prev) => prev.map((item) => (item.id === editingExpenseId ? payload : item)));
     } else {
       setExpenses((prev) => [payload, ...prev]);
     }
+
+    recordActivity?.({
+      type: "vendor",
+      title: isEditing ? "Edit tagihan vendor" : "Tambah tagihan vendor",
+      description: `${payload.nama || "Tagihan vendor"} untuk ${payload.vendor || "vendor"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
+      tone: "info",
+    });
+
     resetExpenseForm();
-    showToast(editingExpenseId ? "Tagihan vendor diperbarui." : "Tagihan vendor ditambahkan.", "emerald");
+    showToast(isEditing ? "Tagihan vendor diperbarui." : "Tagihan vendor ditambahkan.", "emerald");
   };
 
   const editExpense = (item) => {
@@ -170,6 +180,13 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
 
     setExpenses((prev) => prev.filter((expense) => expense.id !== item.id));
     setVendorPayments((prev) => prev.filter((payment) => payment.expenseId !== item.id));
+
+    recordActivity?.({
+      type: "vendor",
+      title: "Hapus tagihan vendor",
+      description: `${item.nama || "Tagihan vendor"} untuk ${item.vendor || "vendor"} dihapus beserta pembayaran tertautnya.`,
+      tone: "danger",
+    });
 
     if (editingExpenseId === item.id) resetExpenseForm();
     showToast("Tagihan vendor berhasil dihapus dari Supabase.", "emerald");
@@ -203,13 +220,23 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
       catatan: incomeForm.catatan.trim(),
     });
 
-    if (editingIncomeId) {
+    const isEditing = Boolean(editingIncomeId);
+
+    if (isEditing) {
       setOtherIncomes((prev) => prev.map((item) => (item.id === editingIncomeId ? payload : item)));
     } else {
       setOtherIncomes((prev) => [payload, ...prev]);
     }
+
+    recordActivity?.({
+      type: "pemasukan",
+      title: isEditing ? "Edit pemasukan lain" : "Tambah pemasukan lain",
+      description: `${payload.nama || "Pemasukan lain"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
+      tone: "info",
+    });
+
     resetIncomeForm();
-    showToast(editingIncomeId ? "Pemasukan lain diperbarui." : "Pemasukan lain ditambahkan.", "emerald");
+    showToast(isEditing ? "Pemasukan lain diperbarui." : "Pemasukan lain ditambahkan.", "emerald");
   };
 
   const editIncome = (item) => {
@@ -231,7 +258,17 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
       message: "Transaksi pemasukan lain ini akan dihapus.",
     });
     if (!confirmed) return;
+    const deletedIncome = otherIncomes.find((item) => item.id === id);
+
     setOtherIncomes((prev) => prev.filter((item) => item.id !== id));
+
+    recordActivity?.({
+      type: "pemasukan",
+      title: "Hapus pemasukan lain",
+      description: `${deletedIncome?.nama || "Pemasukan lain"} dihapus dari data.`,
+      tone: "danger",
+    });
+
     if (editingIncomeId === id) resetIncomeForm();
     showToast("Pemasukan lain berhasil dihapus.", "emerald");
   };

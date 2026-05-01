@@ -8,7 +8,7 @@ import {
 import { deleteParticipantFromSupabase } from "../../shared/lib/supabasePersistence";
 import { useParticipantPayments } from "./useParticipantPayments";
 
-export function useParticipantsDomain({ initialParticipants, defaultTarget, showToast }) {
+export function useParticipantsDomain({ initialParticipants, defaultTarget, showToast, recordActivity }) {
   const [participants, setParticipants] = useState(initialParticipants);
   const [participantForm, setParticipantForm] = useState({
     nama: "",
@@ -103,13 +103,23 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
       defaultTarget
     );
 
-    if (editingParticipantId) {
+    const isEditing = Boolean(editingParticipantId);
+
+    if (isEditing) {
       setParticipants((prev) => prev.map((item) => (item.id === editingParticipantId ? payload : item)));
     } else {
       setParticipants((prev) => [payload, ...prev]);
     }
+
+    recordActivity?.({
+      type: "santri",
+      title: isEditing ? "Edit data santri" : "Tambah santri",
+      description: `${payload.nama || "Santri"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan target iuran ${payload.targetIuran}.`,
+      tone: "info",
+    });
+
     resetParticipantForm();
-    showToast(editingParticipantId ? "Data santri diperbarui." : "Santri baru ditambahkan.", "emerald");
+    showToast(isEditing ? "Data santri diperbarui." : "Santri baru ditambahkan.", "emerald");
   };
 
   const editParticipant = (item) => {
@@ -134,7 +144,17 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
     try {
       await deleteParticipantFromSupabase(participantId);
 
+      const deletedParticipant = participantLookup[String(participantId)];
+
       setParticipants((prev) => prev.filter((item) => item.id !== participantId));
+
+      recordActivity?.({
+        type: "santri",
+        title: "Hapus data santri",
+        description: `${deletedParticipant?.nama || "Santri"} dan histori pembayaran iurannya dihapus.`,
+        tone: "danger",
+      });
+
       if (editingParticipantId === participantId) resetParticipantForm();
       if (paymentDomain.participantPaymentForm.participantId === String(participantId)) {
         paymentDomain.setParticipantPaymentForm((prev) => ({ ...prev, participantId: "" }));
@@ -153,6 +173,13 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
     });
     if (!confirmed) return;
     setParticipants((prev) => prev.map((item) => ({ ...item, targetIuran: clampMin(defaultTarget) })));
+
+    recordActivity?.({
+      type: "santri",
+      title: "Samakan target iuran",
+      description: `Target iuran semua santri diganti menjadi ${clampMin(defaultTarget)}.`,
+      tone: "important",
+    });
   };
 
   return {
