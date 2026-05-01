@@ -223,6 +223,30 @@ const addPdfFooter = (doc, printedAt) => {
   }
 };
 
+const ensurePdfSpace = (doc, y, minSpace = 32) => {
+  if (y + minSpace <= 275) return y;
+
+  doc.addPage();
+  return 16;
+};
+
+const addPdfSectionTitle = (doc, title, y) => {
+  const nextY = ensurePdfSpace(doc, y, 14);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text(sanitizePdfText(title), 14, nextY);
+
+  return nextY + 5;
+};
+
+const buildPdfDetailsText = (details = []) => {
+  if (!details.length) return "Tidak ada detail tambahan.";
+
+  return details.map((detail) => `- ${sanitizePdfText(detail)}`).join("\n");
+};
+
 const pdfTableTheme = {
   theme: "grid",
   styles: {
@@ -325,7 +349,7 @@ const PrintStyles = () => (
       }
 
       .print-footer-page::after {
-        content: "Halaman " counter(page) " dari " counter(pages);
+        content: "";
       }
 
 
@@ -1232,8 +1256,8 @@ export default function LaporanPage({ app }) {
 
   const showOperationalAuditSection =
     canEdit &&
-    !printScope &&
-    (laporanView === "operasional" || laporanView === "audit");
+    (printScope === "audit" ||
+      (!printScope && (laporanView === "operasional" || laporanView === "audit")));
 
   const showProofAuditSection =
     canEdit && (printScope === "audit" || (!printScope && laporanView === "audit"));
@@ -1512,7 +1536,54 @@ export default function LaporanPage({ app }) {
 
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const generatedAt = formatPrintDate();
-    let y = await addPdfHeader(doc, "Lampiran Audit Bukti Pembayaran", generatedAt, periodLabel);
+    let y = await addPdfHeader(doc, "Lampiran Audit Lengkap", generatedAt, periodLabel);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Audit Konsistensi Data Keuangan", "Nilai"]],
+      body: [
+        ["Status keseluruhan", sanitizePdfText(consistencyOverallStatus)],
+        ["Area aman", `${consistencySafeCount} area`],
+        ["Area perlu dicek", `${consistencyCheckCount} area`],
+        ["Area bermasalah", `${consistencyProblemCount} area`],
+      ],
+      columnStyles: {
+        0: { cellWidth: 95, fontStyle: "bold" },
+        1: { cellWidth: 87, halign: "right", fontStyle: "bold" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Detail Audit Konsistensi", y);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Area", "Status", "Keterangan", "Detail"]],
+      body: consistencyAuditItems.map((item) => [
+        sanitizePdfText(item.title),
+        sanitizePdfText(item.status),
+        sanitizePdfText(item.description),
+        buildPdfDetailsText(item.details),
+      ]),
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 7,
+        cellPadding: 1.6,
+      },
+      columnStyles: {
+        0: { cellWidth: 35, fontStyle: "bold" },
+        1: { cellWidth: 22, fontStyle: "bold" },
+        2: { cellWidth: 55 },
+        3: { cellWidth: 70 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Ringkasan Audit Bukti Pembayaran", y);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -1533,6 +1604,10 @@ export default function LaporanPage({ app }) {
           `${auditProofSummary.vendorWithoutProofCount} transaksi`,
         ],
         [
+          "Nominal vendor tanpa bukti",
+          rupiahForPdf(auditProofSummary.vendorWithoutProofAmount),
+        ],
+        [
           "Total transaksi tanpa bukti",
           `${auditProofSummary.totalWithoutProof} transaksi`,
         ],
@@ -1544,12 +1619,7 @@ export default function LaporanPage({ app }) {
     });
 
     y = doc.lastAutoTable.finalY + 8;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Iuran Santri Tanpa Bukti", 14, y);
-    y += 5;
+    y = addPdfSectionTitle(doc, "Iuran Santri Tanpa Bukti", y);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -1580,21 +1650,10 @@ export default function LaporanPage({ app }) {
         4: { cellWidth: 35 },
         5: { cellWidth: 30, halign: "right", fontStyle: "bold" },
       },
-      didDrawPage: () => {},
     });
 
     y = doc.lastAutoTable.finalY + 8;
-
-    if (y > 245) {
-      doc.addPage();
-      y = 16;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Daftar Pembayaran Vendor", 14, y);
-    y += 5;
+    y = addPdfSectionTitle(doc, "Daftar Pembayaran Vendor", y);
 
     const vendorBody =
       vendorAuditRows.length > 0
@@ -1658,11 +1717,7 @@ export default function LaporanPage({ app }) {
     });
 
     y = doc.lastAutoTable.finalY + 8;
-
-    if (y > 255) {
-      doc.addPage();
-      y = 16;
-    }
+    y = ensurePdfSpace(doc, y, 26);
 
     autoTable(doc, {
       ...pdfTableTheme,
@@ -1681,7 +1736,7 @@ export default function LaporanPage({ app }) {
     });
 
     addPdfFooter(doc, generatedAt);
-    doc.save(`audit-bukti-pembayaran-rihlah-${periodFileSuffix}.pdf`);
+    doc.save(`audit-konsistensi-dan-bukti-rihlah-${periodFileSuffix}.pdf`);
   };
 
   return (
@@ -1696,7 +1751,7 @@ export default function LaporanPage({ app }) {
             </p>
             <h1 className="mt-2 text-2xl font-extrabold text-slate-950">
               {printScope === "audit"
-                ? "Lampiran Audit Bukti Pembayaran"
+                ? "Lampiran Audit Lengkap"
                 : printScope === "final"
                   ? "Laporan Final Panitia"
                   : "Laporan Keuangan Kegiatan"}
@@ -1806,7 +1861,7 @@ export default function LaporanPage({ app }) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => requestPrint("laporan")} className={buttonOutline}>
+          <button onClick={downloadReportPdf} className={buttonOutline}>
             <Printer className="mr-2 h-4 w-4" />
             Cetak Laporan
           </button>
@@ -1818,7 +1873,7 @@ export default function LaporanPage({ app }) {
 
           {canEdit ? (
             <>
-              <button onClick={() => requestPrint("audit")} className={buttonOutline}>
+              <button onClick={downloadAuditPdf} className={buttonOutline}>
                 <Printer className="mr-2 h-4 w-4" />
                 Cetak Audit
               </button>
@@ -1828,7 +1883,7 @@ export default function LaporanPage({ app }) {
                 Download PDF Audit
               </button>
 
-              <button onClick={() => requestPrint("final")} className={buttonOutline}>
+              <button onClick={downloadFinalReportPdf} className={buttonOutline}>
                 <Printer className="mr-2 h-4 w-4" />
                 Cetak Final
               </button>
@@ -1974,7 +2029,7 @@ export default function LaporanPage({ app }) {
             </div>
 
             <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <button onClick={() => requestPrint("final")} className={buttonOutline}>
+              <button onClick={downloadFinalReportPdf} className={buttonOutline}>
                 <Printer className="mr-2 h-4 w-4" />
                 Cetak Laporan Final
               </button>
@@ -2182,7 +2237,7 @@ export default function LaporanPage({ app }) {
               )}
             </div>
 
-            <div className="space-y-3 print-card">
+            <div className="space-y-3 print-card no-print">
               <h3 className="text-lg font-semibold text-slate-900">
                 Aksi laporan
               </h3>
