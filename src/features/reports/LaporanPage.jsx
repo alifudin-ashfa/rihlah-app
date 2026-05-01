@@ -610,6 +610,49 @@ const PrintStyles = () => (
   `}</style>
 );
 
+
+function ConsistencyAuditItem({ title, description, status = "Perlu Dicek", details = [] }) {
+  const tone =
+    status === "Aman"
+      ? "emerald"
+      : status === "Bermasalah"
+        ? "rose"
+        : "amber";
+
+  const wrapperClass =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50"
+      : tone === "rose"
+        ? "border-rose-200 bg-rose-50"
+        : "border-amber-200 bg-amber-50";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${wrapperClass}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900">{title}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+        </div>
+        <Pill tone={tone}>{status}</Pill>
+      </div>
+
+      {details.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-600">
+          {details.slice(0, 6).map((detail, index) => (
+            <li key={`${title}-${index}`}>• {detail}</li>
+          ))}
+          {details.length > 6 ? (
+            <li className="font-semibold text-slate-700">
+              • +{details.length - 6} item lain perlu dicek
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+
 export default function LaporanPage({ app }) {
   const [printScope, setPrintScope] = useState(null);
   const [filterStartDate, setFilterStartDate] = useState("");
@@ -851,6 +894,259 @@ export default function LaporanPage({ app }) {
       : finalStatus === "Belum Aman"
         ? `Masih ada ${finalOutstandingParticipants.length} santri belum lunas/cicilan dan ${finalTransactionsWithoutProof.length} transaksi tanpa bukti. Lengkapi sebelum laporan final dibagikan.`
         : "Data sudah mendekati siap, tetapi masih ada item yang perlu dicek seperti sisa tagihan vendor atau selisih lebih bayar.";
+
+  const consistencyAuditItems = useMemo(() => {
+    const paymentRows = Array.isArray(participantPaymentRows)
+      ? participantPaymentRows
+      : [];
+    const vendorRows = Array.isArray(allVendorPaymentRows)
+      ? allVendorPaymentRows
+      : [];
+    const vendorBillRows = Array.isArray(expenseRows) ? expenseRows : [];
+
+    const participantZeroNominal = paymentRows.filter(
+      (payment) => Number(payment?.nominal || 0) <= 0
+    );
+    const participantNoDate = paymentRows.filter((payment) => !payment?.tanggal);
+    const participantNoMethod = paymentRows.filter((payment) => !payment?.metode);
+    const participantNoProof = paymentRows.filter(
+      (payment) => !hasParticipantProof(payment)
+    );
+
+    const participantDuplicateMap = new Map();
+    paymentRows.forEach((payment) => {
+      const key = [
+        String(payment?.participantName || "").trim().toLowerCase(),
+        String(payment?.tanggal || "").trim(),
+        Number(payment?.nominal || 0),
+        String(payment?.metode || "").trim().toLowerCase(),
+      ].join("|");
+
+      if (!participantDuplicateMap.has(key)) participantDuplicateMap.set(key, []);
+      participantDuplicateMap.get(key).push(payment);
+    });
+    const participantDuplicateGroups = [...participantDuplicateMap.values()].filter(
+      (group) =>
+        group.length > 1 &&
+        group[0]?.participantName &&
+        group[0]?.tanggal &&
+        Number(group[0]?.nominal || 0) > 0
+    );
+
+    const vendorBillsNoVendor = vendorBillRows.filter((item) => !item?.vendor);
+    const vendorBillsNoDueDate = vendorBillRows.filter((item) => !item?.jatuhTempo);
+    const vendorBillsZeroNominal = vendorBillRows.filter(
+      (item) => Number(item?.nominal || 0) <= 0
+    );
+    const vendorBillsOverpaid = vendorBillRows.filter(
+      (item) =>
+        Number(item?.paid || 0) > Number(item?.nominal || 0) ||
+        item?.status === "Lebih Bayar"
+    );
+
+    const vendorPaymentUnlinked = vendorRows.filter((payment) => !payment?.expenseId);
+    const vendorPaymentZeroNominal = vendorRows.filter(
+      (payment) => Number(payment?.nominal || 0) <= 0
+    );
+    const vendorPaymentNoDate = vendorRows.filter((payment) => !payment?.tanggal);
+    const vendorPaymentNoMethod = vendorRows.filter((payment) => !payment?.metode);
+    const vendorPaymentNoProof = vendorRows.filter((payment) => !hasVendorProof(payment));
+    const vendorPaymentWithAdmin = vendorRows.filter(
+      (payment) => Number(payment?.biayaAdmin || 0) > 0
+    );
+
+    return [
+      {
+        title: "Pembayaran iuran santri",
+        status:
+          participantZeroNominal.length > 0 ||
+          participantNoDate.length > 0 ||
+          participantNoMethod.length > 0
+            ? "Bermasalah"
+            : participantNoProof.length > 0 || participantDuplicateGroups.length > 0
+              ? "Perlu Dicek"
+              : "Aman",
+        description:
+          participantZeroNominal.length > 0 ||
+          participantNoDate.length > 0 ||
+          participantNoMethod.length > 0
+            ? "Ada pembayaran iuran dengan nominal, tanggal, atau metode yang belum valid."
+            : participantNoProof.length > 0 || participantDuplicateGroups.length > 0
+              ? "Pembayaran iuran sudah tercatat, tetapi masih ada bukti kosong atau potensi duplikat."
+              : "Nominal, tanggal, metode, dan bukti iuran santri sudah aman.",
+        details: [
+          ...participantZeroNominal.map(
+            (payment) =>
+              `${payment.participantName || "Santri tidak diketahui"} memiliki nominal iuran kosong/0.`
+          ),
+          ...participantNoDate.map(
+            (payment) =>
+              `${payment.participantName || "Santri tidak diketahui"} memiliki pembayaran tanpa tanggal.`
+          ),
+          ...participantNoMethod.map(
+            (payment) =>
+              `${payment.participantName || "Santri tidak diketahui"} memiliki pembayaran tanpa metode.`
+          ),
+          ...participantDuplicateGroups.map((group) => {
+            const payment = group[0];
+            return `Potensi duplikat: ${payment.participantName} pada ${payment.tanggal} sebesar ${formatRupiah(payment.nominal)} (${group.length} transaksi).`;
+          }),
+          ...(participantNoProof.length > 0
+            ? [
+                `${participantNoProof.length} transaksi iuran belum memiliki bukti pembayaran.`,
+              ]
+            : []),
+        ],
+      },
+      {
+        title: "Tagihan dan pembayaran vendor",
+        status:
+          vendorBillsNoVendor.length > 0 ||
+          vendorBillsNoDueDate.length > 0 ||
+          vendorBillsZeroNominal.length > 0 ||
+          vendorPaymentZeroNominal.length > 0 ||
+          vendorPaymentNoDate.length > 0 ||
+          vendorPaymentNoMethod.length > 0
+            ? "Bermasalah"
+            : vendorPaymentUnlinked.length > 0 ||
+                vendorBillsOverpaid.length > 0 ||
+                vendorPaymentNoProof.length > 0
+              ? "Perlu Dicek"
+              : "Aman",
+        description:
+          vendorBillsNoVendor.length > 0 ||
+          vendorBillsNoDueDate.length > 0 ||
+          vendorBillsZeroNominal.length > 0 ||
+          vendorPaymentZeroNominal.length > 0 ||
+          vendorPaymentNoDate.length > 0 ||
+          vendorPaymentNoMethod.length > 0
+            ? "Ada data vendor yang belum lengkap atau nominalnya belum valid."
+            : vendorPaymentUnlinked.length > 0 ||
+                vendorBillsOverpaid.length > 0 ||
+                vendorPaymentNoProof.length > 0
+              ? "Data vendor sudah berjalan, tetapi masih ada bukti, tautan, atau selisih yang perlu dicek."
+              : "Tagihan dan pembayaran vendor sudah konsisten.",
+        details: [
+          ...vendorBillsNoVendor.map(
+            (item) => `${item?.nama || "Tagihan vendor"} belum memiliki nama vendor.`
+          ),
+          ...vendorBillsNoDueDate.map(
+            (item) => `${item?.nama || item?.vendor || "Tagihan vendor"} belum memiliki jatuh tempo.`
+          ),
+          ...vendorBillsZeroNominal.map(
+            (item) => `${item?.nama || item?.vendor || "Tagihan vendor"} memiliki nominal kosong/0.`
+          ),
+          ...vendorPaymentZeroNominal.map(
+            (payment) =>
+              `${payment.vendorSnapshot || "Pembayaran vendor"} memiliki nominal pembayaran kosong/0.`
+          ),
+          ...vendorPaymentNoDate.map(
+            (payment) =>
+              `${payment.vendorSnapshot || "Pembayaran vendor"} belum memiliki tanggal pembayaran.`
+          ),
+          ...vendorPaymentNoMethod.map(
+            (payment) =>
+              `${payment.vendorSnapshot || "Pembayaran vendor"} belum memiliki metode pembayaran.`
+          ),
+          ...(vendorPaymentUnlinked.length > 0
+            ? [
+                `${vendorPaymentUnlinked.length} pembayaran vendor belum tertaut ke tagihan.`,
+              ]
+            : []),
+          ...vendorBillsOverpaid.map(
+            (item) =>
+              `${item?.vendor || item?.nama || "Vendor"} berstatus lebih bayar atau dibayar melebihi tagihan.`
+          ),
+          ...(vendorPaymentNoProof.length > 0
+            ? [`${vendorPaymentNoProof.length} pembayaran vendor belum memiliki bukti.`]
+            : []),
+          ...(vendorPaymentWithAdmin.length > 0
+            ? [
+                `${vendorPaymentWithAdmin.length} pembayaran vendor memiliki biaya admin tercatat.`,
+              ]
+            : ["Belum ada biaya admin vendor yang tercatat."]),
+        ],
+      },
+      {
+        title: "Konsistensi ringkasan laporan",
+        status:
+          saldoKasSaatIni < 0 || proyeksiSaldoAkhir < 0
+            ? "Bermasalah"
+            : totalIuranOutstanding > 0 ||
+                totalVendorOutstanding > 0 ||
+                totalVendorUnlinked > 0 ||
+                Number(totalVendorOverpaid || 0) + Number(totalIuranOverpaid || 0) > 0
+              ? "Perlu Dicek"
+              : "Aman",
+        description:
+          saldoKasSaatIni < 0 || proyeksiSaldoAkhir < 0
+            ? "Saldo kas atau proyeksi saldo akhir masih negatif."
+            : totalIuranOutstanding > 0 ||
+                totalVendorOutstanding > 0 ||
+                totalVendorUnlinked > 0 ||
+                Number(totalVendorOverpaid || 0) + Number(totalIuranOverpaid || 0) > 0
+              ? "Ringkasan laporan sudah bisa dibaca, tetapi masih ada tunggakan atau selisih yang perlu ditindaklanjuti."
+              : "Ringkasan laporan sudah konsisten dan tidak ada selisih utama.",
+        details: [
+          ...(saldoKasSaatIni < 0
+            ? [`Saldo kas saat ini negatif: ${formatRupiah(saldoKasSaatIni)}.`]
+            : []),
+          ...(proyeksiSaldoAkhir < 0
+            ? [`Proyeksi saldo akhir negatif: ${formatRupiah(proyeksiSaldoAkhir)}.`]
+            : []),
+          ...(totalIuranOutstanding > 0
+            ? [`Tunggakan iuran masih ${formatRupiah(totalIuranOutstanding)}.`]
+            : []),
+          ...(totalVendorOutstanding > 0
+            ? [`Sisa tagihan vendor masih ${formatRupiah(totalVendorOutstanding)}.`]
+            : []),
+          ...(totalVendorUnlinked > 0
+            ? [`Pembayaran vendor belum tertaut sebesar ${formatRupiah(totalVendorUnlinked)}.`]
+            : []),
+          ...(Number(totalVendorOverpaid || 0) + Number(totalIuranOverpaid || 0) > 0
+            ? [
+                `Total lebih bayar terdeteksi ${formatRupiah(
+                  Number(totalVendorOverpaid || 0) + Number(totalIuranOverpaid || 0)
+                )}.`,
+              ]
+            : []),
+        ],
+      },
+    ];
+  }, [
+    allVendorPaymentRows,
+    expenseRows,
+    participantPaymentRows,
+    proyeksiSaldoAkhir,
+    saldoKasSaatIni,
+    totalIuranOutstanding,
+    totalIuranOverpaid,
+    totalVendorOutstanding,
+    totalVendorOverpaid,
+    totalVendorUnlinked,
+  ]);
+
+  const consistencyProblemCount = consistencyAuditItems.filter(
+    (item) => item.status === "Bermasalah"
+  ).length;
+  const consistencyCheckCount = consistencyAuditItems.filter(
+    (item) => item.status === "Perlu Dicek"
+  ).length;
+  const consistencySafeCount = consistencyAuditItems.filter(
+    (item) => item.status === "Aman"
+  ).length;
+  const consistencyOverallStatus =
+    consistencyProblemCount > 0
+      ? "Bermasalah"
+      : consistencyCheckCount > 0
+        ? "Perlu Dicek"
+        : "Aman";
+  const consistencyOverallTone =
+    consistencyOverallStatus === "Aman"
+      ? "emerald"
+      : consistencyOverallStatus === "Bermasalah"
+        ? "rose"
+        : "amber";
 
   const targetIuranLabel = "Target iuran total kegiatan";
   const iuranMasukLabel = hasDateFilter
@@ -1820,6 +2116,52 @@ export default function LaporanPage({ app }) {
           subtitle="Pisahkan review audit dari ringkasan agar lebih mudah dibaca saat rapat atau pengecekan internal."
           className="print-section"
         >
+          <div className="mb-6 space-y-4 print-card">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Audit Konsistensi Data Keuangan
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Pemeriksaan otomatis untuk menemukan data kosong, potensi duplikat, pembayaran belum tertaut, lebih bayar, dan ringkasan kas negatif sebelum laporan dipakai resmi.
+                  </p>
+                </div>
+                <Pill tone={consistencyOverallTone}>{consistencyOverallStatus}</Pill>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <MiniStat
+                  label="Aman"
+                  value={`${consistencySafeCount} area`}
+                  tone="emerald"
+                />
+                <MiniStat
+                  label="Perlu dicek"
+                  value={`${consistencyCheckCount} area`}
+                  tone={consistencyCheckCount > 0 ? "amber" : "slate"}
+                />
+                <MiniStat
+                  label="Bermasalah"
+                  value={`${consistencyProblemCount} area`}
+                  tone={consistencyProblemCount > 0 ? "rose" : "slate"}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 xl:grid-cols-3">
+              {consistencyAuditItems.map((item) => (
+                <ConsistencyAuditItem
+                  key={item.title}
+                  title={item.title}
+                  description={item.description}
+                  status={item.status}
+                  details={item.details}
+                />
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6 print-grid-2">
             <div className="space-y-3 print-card">
               <h3 className="text-lg font-semibold text-slate-900">
