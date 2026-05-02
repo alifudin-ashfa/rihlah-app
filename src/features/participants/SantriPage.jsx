@@ -52,10 +52,48 @@ function formatFileDate() {
   return `${year}-${month}-${day}`;
 }
 
+function getClassSortValue(value) {
+  const text = String(value || "").trim();
+
+  if (!text) return Number.MAX_SAFE_INTEGER;
+
+  const numericMatch = text.match(/\d+/);
+
+  if (numericMatch) {
+    return Number(numericMatch[0]);
+  }
+
+  return Number.MAX_SAFE_INTEGER - 1;
+}
+
+function sortParticipantsByClassThenName(rows = []) {
+  return [...rows].sort((a, b) => {
+    const classA = getClassSortValue(a.kelas);
+    const classB = getClassSortValue(b.kelas);
+
+    if (classA !== classB) return classA - classB;
+
+    const rawClassA = String(a.kelas || "");
+    const rawClassB = String(b.kelas || "");
+    const classCompare = rawClassA.localeCompare(rawClassB, "id", {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    if (classCompare !== 0) return classCompare;
+
+    return String(a.nama || "").localeCompare(String(b.nama || ""), "id", {
+      sensitivity: "base",
+    });
+  });
+}
+
 export default function SantriPage({ app }) {
   const {
     config,
-    canManageData,
+    authProfile,
+    canEdit,
+    canManageData: rawCanManageData,
     isFinalLocked,
     expenseForm,
     setExpenseForm,
@@ -165,7 +203,19 @@ export default function SantriPage({ app }) {
     selectedParticipantForPayment,
   } = app;
 
+  const profileRole = String(authProfile?.role || "").toLowerCase();
+  const canManageData = Boolean(
+    rawCanManageData ||
+      canEdit ||
+      ["admin", "bendahara", "pengelola"].includes(profileRole)
+  );
+
   const [paymentProofFilter, setPaymentProofFilter] = useState("all");
+
+  const participantPaymentOptions = useMemo(
+    () => sortParticipantsByClassThenName(Array.isArray(participantRows) ? participantRows : []),
+    [participantRows]
+  );
 
   const paymentProofSummary = useMemo(() => {
     const rows = Array.isArray(participantPaymentHistory)
@@ -635,9 +685,9 @@ export default function SantriPage({ app }) {
                       }
                     >
                       <option value="">Pilih santri</option>
-                      {participantRows.map((item) => (
+                      {participantPaymentOptions.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.nama} - {item.kelas || "Tanpa kelas"}
+                          Kelas {item.kelas || "Tanpa kelas"} - {item.nama}
                         </option>
                       ))}
                     </select>
@@ -1085,13 +1135,23 @@ export default function SantriPage({ app }) {
                         </button>
 
                         {canManageData ? (
-                          <button
-                            onClick={() => removeParticipant(item.id)}
-                            className={smallButton}
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            Hapus
-                          </button>
+                          <>
+                            <button
+                              onClick={() => focusParticipantPaymentForm(item.id)}
+                              className={smallButton}
+                            >
+                              <Wallet className="mr-1 h-3.5 w-3.5" />
+                              Input iuran
+                            </button>
+
+                            <button
+                              onClick={() => removeParticipant(item.id)}
+                              className={smallButton}
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              Hapus
+                            </button>
+                          </>
                         ) : null}
                       </div>
                     </div>
@@ -1147,9 +1207,9 @@ export default function SantriPage({ app }) {
                   }
                 >
                   <option value="all">Semua santri</option>
-                  {participantRows.map((item) => (
+                  {participantPaymentOptions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.nama}
+                      Kelas {item.kelas || "Tanpa kelas"} - {item.nama}
                     </option>
                   ))}
                 </select>
