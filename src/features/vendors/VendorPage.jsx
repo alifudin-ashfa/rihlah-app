@@ -31,7 +31,9 @@ const hasVendorProof = (payment) =>
 
 export default function VendorPage({ app }) {
   const {
-    canManageData,
+    authProfile,
+    canEdit,
+    canManageData: rawCanManageData,
     isFinalLocked,
     expenseForm,
     setExpenseForm,
@@ -74,6 +76,13 @@ export default function VendorPage({ app }) {
     selectedExpenseForForm,
     proofStatusText,
   } = app;
+
+  const profileRole = String(authProfile?.role || "").toLowerCase();
+  const canManageData = Boolean(
+    rawCanManageData ||
+      canEdit ||
+      ["admin", "bendahara", "pengelola"].includes(profileRole)
+  );
 
   const [vendorProofPreviewUrls, setVendorProofPreviewUrls] = useState({});
   const [expandedVendors, setExpandedVendors] = useState({});
@@ -1043,6 +1052,31 @@ export default function VendorPage({ app }) {
                   }
                 />
               </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Bukti transfer
+                </label>
+                {canManageData ? (
+                  <input
+                    ref={paymentProofInputRef}
+                    type="file"
+                    accept="image/*"
+                    className={inputClass}
+                    onChange={handleVendorProofUpload}
+                  />
+                ) : (
+                  <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500">
+                    Mode pelihat: upload bukti disembunyikan.
+                  </p>
+                )}
+                <p className="text-xs text-slate-500">
+                  Opsional. Upload bukti transfer saat mencatat DP, cicilan, atau pelunasan.
+                </p>
+                {proofStatusText ? (
+                  <p className="text-xs text-slate-500">{proofStatusText}</p>
+                ) : null}
+              </div>
             </div>
 
             <button
@@ -1109,27 +1143,7 @@ export default function VendorPage({ app }) {
                   />
                 </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    Bukti transfer
-                  </label>
-                  {canManageData ? (
-                    <input
-                      ref={paymentProofInputRef}
-                      type="file"
-                      accept="image/*"
-                      className={inputClass}
-                      onChange={handleVendorProofUpload}
-                    />
-                  ) : (
-                    <p className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-500">
-                      Mode pelihat: upload bukti disembunyikan.
-                    </p>
-                  )}
-                  {proofStatusText ? (
-                    <p className="text-xs text-slate-500">{proofStatusText}</p>
-                  ) : null}
-                </div>
+
               </div>
             ) : null}
 
