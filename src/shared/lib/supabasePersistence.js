@@ -226,6 +226,26 @@ export const deleteParticipantPaymentFromSupabase = async (id) => {
   throwIfError("Gagal menghapus pembayaran iuran", error);
 };
 
+export const upsertParticipantToSupabase = async (participant, defaultTarget = 0) => {
+  if (!isSupabaseConfigured || !supabase || !participant) return;
+
+  const { error } = await supabase
+    .from("participants")
+    .upsert(mapParticipantToDb(participant, defaultTarget), { onConflict: "id" });
+
+  throwIfError("Gagal menyimpan data santri", error);
+};
+
+export const upsertParticipantPaymentToSupabase = async (payment, participantId) => {
+  if (!isSupabaseConfigured || !supabase || !payment || !participantId) return;
+
+  const { error } = await supabase
+    .from("participant_payments")
+    .upsert(mapParticipantPaymentToDb(payment, participantId), { onConflict: "id" });
+
+  throwIfError("Gagal menyimpan pembayaran iuran", error);
+};
+
 export const deleteExpenseFromSupabase = async (id) => {
   if (!isSupabaseConfigured || !supabase || !id) return;
 

@@ -225,25 +225,9 @@ export function useRihlahApp() {
     editParticipant: guardFinalLock("mengedit data santri", participantsDomain.editParticipant),
     removeParticipant: guardFinalLock("menghapus data santri", participantsDomain.removeParticipant),
     resetParticipantForm: guardFinalLock("membatalkan edit santri", participantsDomain.resetParticipantForm),
-    addParticipantPayment: guardFinalLock(
-      "mencatat pembayaran santri",
-      withActivityLog(participantsDomain.addParticipantPayment, () => ({
-        type: "iuran",
-        title: "Tambah pembayaran iuran",
-        description: "Pembayaran iuran santri dicatat.",
-        tone: "important",
-      }))
-    ),
+    addParticipantPayment: guardFinalLock("mencatat pembayaran santri", participantsDomain.addParticipantPayment),
     focusParticipantPaymentForm: guardFinalLock("mencatat pembayaran santri", participantsDomain.focusParticipantPaymentForm),
-    removeParticipantPayment: guardFinalLock(
-      "menghapus pembayaran santri",
-      withActivityLog(participantsDomain.removeParticipantPayment, () => ({
-        type: "iuran",
-        title: "Hapus pembayaran iuran",
-        description: "Pembayaran iuran santri dihapus.",
-        tone: "danger",
-      }))
-    ),
+    removeParticipantPayment: guardFinalLock("menghapus pembayaran santri", participantsDomain.removeParticipantPayment),
     applyDefaultTargetToAll: guardFinalLock("menerapkan target iuran", participantsDomain.applyDefaultTargetToAll),
     ...vendorsDomain,
     addOrUpdateExpense: guardFinalLock("menyimpan tagihan vendor", vendorsDomain.addOrUpdateExpense),

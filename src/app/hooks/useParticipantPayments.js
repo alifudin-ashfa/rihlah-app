@@ -7,13 +7,14 @@ import {
   getToday,
   normalizeParticipantPayment,
 } from "../../shared/lib/rihlahCore";
-import { deleteParticipantPaymentFromSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteParticipantPaymentFromSupabase, upsertParticipantPaymentToSupabase } from "../../shared/lib/supabasePersistence";
 
 export function useParticipantPayments({
   participants,
   setParticipants,
   participantLookup,
   showToast,
+  recordActivity,
 }) {
   const [participantPaymentForm, setParticipantPaymentForm] = useState({
     participantId: "",
@@ -62,7 +63,7 @@ export function useParticipantPayments({
     });
   };
 
-  const addParticipantPayment = () => {
+  const addParticipantPayment = async () => {
     if (!participantPaymentForm.participantId) {
       showToast("Pilih santri yang membayar iuran.", "rose");
       return;
@@ -89,30 +90,49 @@ export function useParticipantPayments({
       buktiDataUrl: participantPaymentForm.buktiDataUrl || "",
     });
 
-    setParticipants((prev) =>
-      prev.map((item) =>
-        String(item.id) === String(participantPaymentForm.participantId)
-          ? {
-              ...item,
-              payments: [
-                paymentPayload,
-                ...(Array.isArray(item.payments) ? item.payments : []),
-              ],
-            }
-          : item
-      )
-    );
+    try {
+      await upsertParticipantPaymentToSupabase(
+        paymentPayload,
+        participantPaymentForm.participantId
+      );
 
-    setParticipantPaymentForm((prev) => ({
-      ...prev,
-      nominal: "",
-      catatan: "",
-      akunMasuk: "",
-      buktiNama: "",
-      buktiDataUrl: "",
-    }));
+      const selectedParticipant =
+        participantLookup[String(participantPaymentForm.participantId)];
 
-    showToast("Pembayaran iuran disimpan.", "emerald");
+      setParticipants((prev) =>
+        prev.map((item) =>
+          String(item.id) === String(participantPaymentForm.participantId)
+            ? {
+                ...item,
+                payments: [
+                  paymentPayload,
+                  ...(Array.isArray(item.payments) ? item.payments : []),
+                ],
+              }
+            : item
+        )
+      );
+
+      recordActivity?.({
+        type: "iuran",
+        title: "Tambah pembayaran iuran",
+        description: `Pembayaran iuran ${selectedParticipant?.nama || "santri"} dicatat dengan nominal ${paymentPayload.nominal}.`,
+        tone: "important",
+      });
+
+      setParticipantPaymentForm((prev) => ({
+        ...prev,
+        nominal: "",
+        catatan: "",
+        akunMasuk: "",
+        buktiNama: "",
+        buktiDataUrl: "",
+      }));
+
+      showToast("Pembayaran iuran disimpan dan tersimpan ke Supabase.", "emerald");
+    } catch (error) {
+      showToast(error.message || "Gagal menyimpan pembayaran iuran ke Supabase.", "rose");
+    }
   };
 
   const focusParticipantPaymentForm = (participantId) => {
@@ -135,6 +155,8 @@ export function useParticipantPayments({
     try {
       await deleteParticipantPaymentFromSupabase(paymentId);
 
+      const selectedParticipant = participantLookup[String(participantId)];
+
       setParticipants((prev) =>
         prev.map((item) =>
           item.id === participantId
@@ -148,7 +170,14 @@ export function useParticipantPayments({
         )
       );
 
-      showToast("Pembayaran iuran berhasil dihapus.", "emerald");
+      recordActivity?.({
+        type: "iuran",
+        title: "Hapus pembayaran iuran",
+        description: `Pembayaran iuran ${selectedParticipant?.nama || "santri"} dihapus.`,
+        tone: "danger",
+      });
+
+      showToast("Pembayaran iuran berhasil dihapus dari Supabase.", "emerald");
     } catch (error) {
       showToast(error.message || "Gagal menghapus pembayaran iuran.", "rose");
     }

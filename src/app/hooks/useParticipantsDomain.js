@@ -5,7 +5,7 @@ import {
   createId,
   normalizeParticipant,
 } from "../../shared/lib/rihlahCore";
-import { deleteParticipantFromSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteParticipantFromSupabase, upsertParticipantToSupabase } from "../../shared/lib/supabasePersistence";
 import { useParticipantPayments } from "./useParticipantPayments";
 
 export function useParticipantsDomain({ initialParticipants, defaultTarget, showToast, recordActivity }) {
@@ -70,6 +70,7 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
     setParticipants,
     participantLookup,
     showToast,
+    recordActivity,
   });
 
   const resetParticipantForm = () => {
@@ -77,7 +78,7 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
     setEditingParticipantId(null);
   };
 
-  const addOrUpdateParticipant = () => {
+  const addOrUpdateParticipant = async () => {
     const targetValue = participantForm.targetIuran === "" ? clampMin(defaultTarget) : clampMin(participantForm.targetIuran);
 
     if (!participantForm.nama.trim()) {
@@ -105,21 +106,27 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
 
     const isEditing = Boolean(editingParticipantId);
 
-    if (isEditing) {
-      setParticipants((prev) => prev.map((item) => (item.id === editingParticipantId ? payload : item)));
-    } else {
-      setParticipants((prev) => [payload, ...prev]);
+    try {
+      await upsertParticipantToSupabase(payload, defaultTarget);
+
+      if (isEditing) {
+        setParticipants((prev) => prev.map((item) => (item.id === editingParticipantId ? payload : item)));
+      } else {
+        setParticipants((prev) => [payload, ...prev]);
+      }
+
+      recordActivity?.({
+        type: "santri",
+        title: isEditing ? "Edit data santri" : "Tambah santri",
+        description: `${payload.nama || "Santri"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan target iuran ${payload.targetIuran}.`,
+        tone: "info",
+      });
+
+      resetParticipantForm();
+      showToast(isEditing ? "Data santri diperbarui dan tersimpan ke Supabase." : "Santri baru ditambahkan dan tersimpan ke Supabase.", "emerald");
+    } catch (error) {
+      showToast(error.message || "Gagal menyimpan data santri ke Supabase.", "rose");
     }
-
-    recordActivity?.({
-      type: "santri",
-      title: isEditing ? "Edit data santri" : "Tambah santri",
-      description: `${payload.nama || "Santri"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan target iuran ${payload.targetIuran}.`,
-      tone: "info",
-    });
-
-    resetParticipantForm();
-    showToast(isEditing ? "Data santri diperbarui." : "Santri baru ditambahkan.", "emerald");
   };
 
   const editParticipant = (item) => {
