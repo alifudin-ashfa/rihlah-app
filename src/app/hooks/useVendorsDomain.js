@@ -100,6 +100,7 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
     expenseLookup,
     showToast,
     paymentProofInputRef,
+    recordActivity,
   });
 
   const resetExpenseForm = () => {

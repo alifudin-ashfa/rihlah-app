@@ -69,7 +69,9 @@ export default function VendorPage({ app }) {
     removeExpense,
     handleVendorProofUpload,
     addVendorPayment,
+    editVendorPayment,
     removeVendorPayment,
+    editingVendorPaymentId,
     refreshVendorProofUrl,
     resetExpenseForm,
     resetVendorPaymentForm,
@@ -316,6 +318,14 @@ export default function VendorPage({ app }) {
       >
         {canManageData ? (
           <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
+            {editingVendorPaymentId ? (
+              <InlineBanner
+                title="Mode edit pembayaran vendor"
+                text="Ubah data pembayaran lalu klik Simpan perubahan. Bukti lama tetap dipakai jika tidak memilih file baru."
+                tone="sky"
+              />
+            ) : null}
+
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
@@ -852,15 +862,28 @@ export default function VendorPage({ app }) {
                                       </div>
 
                                       {canManageData ? (
-                                        <button
-                                          onClick={() =>
-                                            removeVendorPayment(payment)
-                                          }
-                                          className={smallButton}
-                                        >
-                                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                                          Hapus
-                                        </button>
+                                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setVendorView("pembayaran");
+                                              editVendorPayment(payment);
+                                            }}
+                                            className={smallButton}
+                                          >
+                                            Edit
+                                          </button>
+
+                                          <button
+                                            onClick={() =>
+                                              removeVendorPayment(payment)
+                                            }
+                                            className={smallButton}
+                                          >
+                                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                            Hapus
+                                          </button>
+                                        </div>
                                       ) : null}
                                     </div>
                                   </div>
@@ -1162,13 +1185,13 @@ export default function VendorPage({ app }) {
                 <>
                   <button onClick={addVendorPayment} className={buttonPrimary}>
                     <ArrowUpCircle className="mr-2 h-4 w-4" />
-                    Simpan pembayaran
+                    {editingVendorPaymentId ? "Simpan perubahan" : "Simpan pembayaran"}
                   </button>
                   <button
                     onClick={resetVendorPaymentForm}
                     className={buttonOutline}
                   >
-                    Reset form
+                    {editingVendorPaymentId ? "Batal edit" : "Reset form"}
                   </button>
                 </>
               ) : null}
@@ -1342,13 +1365,26 @@ export default function VendorPage({ app }) {
                       </div>
 
                       {canManageData ? (
-                        <button
-                          onClick={() => removeVendorPayment(item)}
-                          className={smallButton}
-                        >
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          Hapus
-                        </button>
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setVendorView("pembayaran");
+                              editVendorPayment(item);
+                            }}
+                            className={smallButton}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => removeVendorPayment(item)}
+                            className={smallButton}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Hapus
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   </div>

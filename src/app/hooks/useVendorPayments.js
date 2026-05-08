@@ -1,4 +1,4 @@
-import { deleteVendorPaymentFromSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteVendorPaymentFromSupabase, upsertVendorPaymentToSupabase } from "../../shared/lib/supabasePersistence";
 import { useMemo, useState } from "react";
 import {
   PAYMENT_METHODS,
@@ -16,7 +16,7 @@ import {
   uploadVendorPaymentProof,
 } from "../../shared/lib/supabaseStorage";
 
-export function useVendorPayments({ setVendorPayments, expenseLookup, showToast, paymentProofInputRef }) {
+export function useVendorPayments({ setVendorPayments, expenseLookup, showToast, paymentProofInputRef, recordActivity }) {
   const [vendorPaymentForm, setVendorPaymentForm] = useState({
     expenseId: "",
     vendorManual: "",
@@ -32,10 +32,12 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
     buktiPath: "",
     buktiFile: null,
   });
+  const [editingVendorPaymentId, setEditingVendorPaymentId] = useState(null);
   const [showVendorPaymentAdvanced, setShowVendorPaymentAdvanced] = useState(false);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
 
   const resetVendorPaymentForm = () => {
+    setEditingVendorPaymentId(null);
     setVendorPaymentForm({
       expenseId: "",
       vendorManual: "",
@@ -75,8 +77,13 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
   const addVendorPayment = async () => {
     const nominal = clampMin(vendorPaymentForm.nominal);
     const biayaAdmin = clampMin(vendorPaymentForm.biayaAdmin);
-    const selectedExpense = vendorPaymentForm.expenseId ? expenseLookup[String(vendorPaymentForm.expenseId)] : null;
-    const vendorName = selectedExpense ? selectedExpense.vendor || selectedExpense.nama : vendorPaymentForm.vendorManual.trim();
+    const isEditing = Boolean(editingVendorPaymentId);
+    const selectedExpense = vendorPaymentForm.expenseId
+      ? expenseLookup[String(vendorPaymentForm.expenseId)]
+      : null;
+    const vendorName = selectedExpense
+      ? selectedExpense.vendor || selectedExpense.nama
+      : vendorPaymentForm.vendorManual.trim();
 
     if (!vendorName) {
       showToast("Pilih tagihan vendor atau isi nama vendor manual.", "rose");
@@ -91,7 +98,7 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
       return;
     }
 
-    const paymentId = createId();
+    const paymentId = editingVendorPaymentId || createId();
 
     let proofUrl = vendorPaymentForm.buktiDataUrl;
     let proofPath = vendorPaymentForm.buktiPath;
@@ -100,7 +107,10 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
     if (vendorPaymentForm.buktiFile) {
       setIsUploadingProof(true);
       try {
-        const uploaded = await uploadVendorPaymentProof({ paymentId, file: vendorPaymentForm.buktiFile });
+        const uploaded = await uploadVendorPaymentProof({
+          paymentId,
+          file: vendorPaymentForm.buktiFile,
+        });
         proofUrl = uploaded.publicUrl || proofUrl;
         proofPath = uploaded.path || "";
         proofName = uploaded.fileName || proofName;
@@ -129,9 +139,61 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
       catatan: vendorPaymentForm.catatan.trim(),
     });
 
-    setVendorPayments((prev) => [payload, ...prev]);
-    resetVendorPaymentForm();
-    showToast(vendorPaymentForm.buktiFile ? "Pembayaran vendor disimpan dan bukti transfer diunggah ke Storage." : "Pembayaran vendor disimpan.", "emerald");
+    try {
+      await upsertVendorPaymentToSupabase(payload);
+
+      if (isEditing) {
+        setVendorPayments((prev) =>
+          prev.map((item) => (String(item.id) === String(paymentId) ? payload : item))
+        );
+      } else {
+        setVendorPayments((prev) => [payload, ...prev]);
+      }
+
+      recordActivity?.({
+        type: "vendor-payment",
+        title: isEditing ? "Edit pembayaran vendor" : "Tambah pembayaran vendor",
+        description: `${vendorName} ${isEditing ? "diperbarui" : "dicatat"} dengan nominal ${nominal}.`,
+        tone: isEditing ? "info" : "important",
+      });
+
+      resetVendorPaymentForm();
+      showToast(
+        isEditing
+          ? "Pembayaran vendor diperbarui dan tersimpan ke Supabase."
+          : vendorPaymentForm.buktiFile
+            ? "Pembayaran vendor disimpan dan bukti transfer diunggah ke Storage."
+            : "Pembayaran vendor disimpan dan tersimpan ke Supabase.",
+        "emerald"
+      );
+    } catch (error) {
+      showToast(error.message || "Gagal menyimpan pembayaran vendor ke Supabase.", "rose");
+    }
+  };
+
+  const editVendorPayment = (payment) => {
+    const item = normalizeVendorPayment(payment);
+    const linkedExpense = item.expenseId ? expenseLookup[String(item.expenseId)] : null;
+
+    setEditingVendorPaymentId(item.id);
+    setVendorPaymentForm({
+      expenseId: item.expenseId || "",
+      vendorManual: linkedExpense ? "" : item.vendorSnapshot || "",
+      jenis: item.jenis || VENDOR_PAYMENT_TYPES[0],
+      tanggal: item.tanggal || getToday(),
+      metode: item.metode || PAYMENT_METHODS[0],
+      akunTujuan: item.akunTujuan || "",
+      nominal: String(item.nominal || ""),
+      biayaAdmin: item.biayaAdmin ? String(item.biayaAdmin) : "",
+      catatan: item.catatan || "",
+      buktiNama: item.buktiNama || "",
+      buktiDataUrl: item.buktiDataUrl || "",
+      buktiPath: item.buktiPath || "",
+      buktiFile: null,
+    });
+    setShowVendorPaymentAdvanced(true);
+
+    if (paymentProofInputRef.current) paymentProofInputRef.current.value = "";
   };
 
   const removeVendorPayment = async (itemOrId) => {
@@ -178,11 +240,13 @@ export function useVendorPayments({ setVendorPayments, expenseLookup, showToast,
   return {
   vendorPaymentForm,
   setVendorPaymentForm,
+  editingVendorPaymentId,
   showVendorPaymentAdvanced,
   setShowVendorPaymentAdvanced,
   resetVendorPaymentForm,
   handleVendorProofUpload,
   addVendorPayment,
+  editVendorPayment,
   removeVendorPayment,
   refreshVendorProofUrl,
   selectedExpenseForForm,

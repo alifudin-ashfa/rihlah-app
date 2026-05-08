@@ -253,15 +253,7 @@ export function useRihlahApp() {
     editIncome: guardFinalLock("mengedit pemasukan lain", vendorsDomain.editIncome),
     removeIncome: guardFinalLock("menghapus pemasukan lain", vendorsDomain.removeIncome),
     handleVendorProofUpload: guardFinalLock("mengunggah bukti vendor", vendorsDomain.handleVendorProofUpload),
-    addVendorPayment: guardFinalLock(
-      "mencatat pembayaran vendor",
-      withActivityLog(vendorsDomain.addVendorPayment, () => ({
-        type: "vendor-payment",
-        title: "Tambah pembayaran vendor",
-        description: "Pembayaran vendor dicatat.",
-        tone: "important",
-      }))
-    ),
+    addVendorPayment: guardFinalLock("mencatat atau mengedit pembayaran vendor", vendorsDomain.addVendorPayment),
     removeVendorPayment: guardFinalLock(
       "menghapus pembayaran vendor",
       withActivityLog(vendorsDomain.removeVendorPayment, () => ({

@@ -277,6 +277,16 @@ export const upsertOtherIncomeToSupabase = async (income) => {
   throwIfError("Gagal menyimpan pemasukan lain", error);
 };
 
+export const upsertVendorPaymentToSupabase = async (payment) => {
+  if (!isSupabaseConfigured || !supabase || !payment) return;
+
+  const { error } = await supabase
+    .from("vendor_payments")
+    .upsert(mapVendorPaymentToDb(payment), { onConflict: "id" });
+
+  throwIfError("Gagal menyimpan pembayaran vendor", error);
+};
+
 export async function loadStateFromSupabase() {
   if (!isSupabaseConfigured || !supabase) return null;
 
