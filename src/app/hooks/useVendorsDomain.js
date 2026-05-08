@@ -1,4 +1,4 @@
-import { deleteExpenseFromSupabase, upsertExpenseToSupabase, upsertOtherIncomeToSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteExpenseFromSupabase, deleteOtherIncomeFromSupabase, upsertExpenseToSupabase, upsertOtherIncomeToSupabase } from "../../shared/lib/supabasePersistence";
 import { useMemo, useState } from "react";
 import {
   EXPENSE_CATEGORIES,
@@ -265,25 +265,33 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
     });
   };
 
-  const removeIncome = (id) => {
+  const removeIncome = async (id) => {
     const confirmed = confirmDestructiveAction({
       title: "Hapus pemasukan lain",
-      message: "Transaksi pemasukan lain ini akan dihapus.",
+      message: "Transaksi pemasukan lain ini akan dihapus dari aplikasi dan Supabase.",
+      confirmationText: "HAPUS",
     });
     if (!confirmed) return;
+
     const deletedIncome = otherIncomes.find((item) => item.id === id);
 
-    setOtherIncomes((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await deleteOtherIncomeFromSupabase(id);
 
-    recordActivity?.({
-      type: "pemasukan",
-      title: "Hapus pemasukan lain",
-      description: `${deletedIncome?.nama || "Pemasukan lain"} dihapus dari data.`,
-      tone: "danger",
-    });
+      setOtherIncomes((prev) => prev.filter((item) => item.id !== id));
 
-    if (editingIncomeId === id) resetIncomeForm();
-    showToast("Pemasukan lain berhasil dihapus.", "emerald");
+      recordActivity?.({
+        type: "pemasukan",
+        title: "Hapus pemasukan lain",
+        description: `${deletedIncome?.nama || "Pemasukan lain"} dihapus dari data.`,
+        tone: "danger",
+      });
+
+      if (editingIncomeId === id) resetIncomeForm();
+      showToast("Pemasukan lain berhasil dihapus dari Supabase.", "emerald");
+    } catch (error) {
+      showToast(error.message || "Gagal menghapus pemasukan lain dari Supabase.", "rose");
+    }
   };
 
   return {

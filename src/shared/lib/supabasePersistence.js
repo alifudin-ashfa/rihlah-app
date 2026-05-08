@@ -257,6 +257,17 @@ export const deleteVendorPaymentFromSupabase = async (id) => {
   throwIfError("Gagal menghapus pembayaran vendor", error);
 };
 
+export const deleteOtherIncomeFromSupabase = async (id) => {
+  if (!isSupabaseConfigured || !supabase || !id) return;
+
+  const { error } = await supabase
+    .from("other_incomes")
+    .delete()
+    .eq("id", String(id));
+
+  throwIfError("Gagal menghapus pemasukan lain", error);
+};
+
 export const upsertExpenseToSupabase = async (item) => {
   if (!isSupabaseConfigured || !supabase || !item) return;
 
