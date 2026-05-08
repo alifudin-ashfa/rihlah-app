@@ -257,6 +257,26 @@ export const deleteVendorPaymentFromSupabase = async (id) => {
   throwIfError("Gagal menghapus pembayaran vendor", error);
 };
 
+export const upsertExpenseToSupabase = async (item) => {
+  if (!isSupabaseConfigured || !supabase || !item) return;
+
+  const { error } = await supabase
+    .from("expenses")
+    .upsert(mapExpenseToDb(item), { onConflict: "id" });
+
+  throwIfError("Gagal menyimpan tagihan vendor", error);
+};
+
+export const upsertOtherIncomeToSupabase = async (income) => {
+  if (!isSupabaseConfigured || !supabase || !income) return;
+
+  const { error } = await supabase
+    .from("other_incomes")
+    .upsert(mapOtherIncomeToDb(income), { onConflict: "id" });
+
+  throwIfError("Gagal menyimpan pemasukan lain", error);
+};
+
 export async function loadStateFromSupabase() {
   if (!isSupabaseConfigured || !supabase) return null;
 

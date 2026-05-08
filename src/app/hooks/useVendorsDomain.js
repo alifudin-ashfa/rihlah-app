@@ -1,4 +1,4 @@
-import { deleteExpenseFromSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteExpenseFromSupabase, upsertExpenseToSupabase, upsertOtherIncomeToSupabase } from "../../shared/lib/supabasePersistence";
 import { useMemo, useState } from "react";
 import {
   EXPENSE_CATEGORIES,
@@ -112,7 +112,7 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
     setEditingIncomeId(null);
   };
 
-  const addOrUpdateExpense = () => {
+  const addOrUpdateExpense = async () => {
     if (!expenseForm.nama.trim()) {
       showToast("Nama tagihan wajib diisi.", "rose");
       return;
@@ -138,21 +138,27 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
 
     const isEditing = Boolean(editingExpenseId);
 
-    if (isEditing) {
-      setExpenses((prev) => prev.map((item) => (item.id === editingExpenseId ? payload : item)));
-    } else {
-      setExpenses((prev) => [payload, ...prev]);
+    try {
+      await upsertExpenseToSupabase(payload);
+
+      if (isEditing) {
+        setExpenses((prev) => prev.map((item) => (item.id === editingExpenseId ? payload : item)));
+      } else {
+        setExpenses((prev) => [payload, ...prev]);
+      }
+
+      recordActivity?.({
+        type: "vendor",
+        title: isEditing ? "Edit tagihan vendor" : "Tambah tagihan vendor",
+        description: `${payload.nama || "Tagihan vendor"} untuk ${payload.vendor || "vendor"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
+        tone: "info",
+      });
+
+      resetExpenseForm();
+      showToast(isEditing ? "Tagihan vendor diperbarui dan tersimpan ke Supabase." : "Tagihan vendor ditambahkan dan tersimpan ke Supabase.", "emerald");
+    } catch (error) {
+      showToast(error.message || "Gagal menyimpan tagihan vendor ke Supabase.", "rose");
     }
-
-    recordActivity?.({
-      type: "vendor",
-      title: isEditing ? "Edit tagihan vendor" : "Tambah tagihan vendor",
-      description: `${payload.nama || "Tagihan vendor"} untuk ${payload.vendor || "vendor"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
-      tone: "info",
-    });
-
-    resetExpenseForm();
-    showToast(isEditing ? "Tagihan vendor diperbarui." : "Tagihan vendor ditambahkan.", "emerald");
   };
 
   const editExpense = (item) => {
@@ -195,7 +201,7 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
   }
 };
 
-  const addOrUpdateIncome = () => {
+  const addOrUpdateIncome = async () => {
     if (!incomeForm.nama.trim()) {
       showToast("Nama pemasukan lain wajib diisi.", "rose");
       return;
@@ -222,21 +228,27 @@ export function useVendorsDomain({ initialExpenses, initialOtherIncomes, initial
 
     const isEditing = Boolean(editingIncomeId);
 
-    if (isEditing) {
-      setOtherIncomes((prev) => prev.map((item) => (item.id === editingIncomeId ? payload : item)));
-    } else {
-      setOtherIncomes((prev) => [payload, ...prev]);
+    try {
+      await upsertOtherIncomeToSupabase(payload);
+
+      if (isEditing) {
+        setOtherIncomes((prev) => prev.map((item) => (item.id === editingIncomeId ? payload : item)));
+      } else {
+        setOtherIncomes((prev) => [payload, ...prev]);
+      }
+
+      recordActivity?.({
+        type: "pemasukan",
+        title: isEditing ? "Edit pemasukan lain" : "Tambah pemasukan lain",
+        description: `${payload.nama || "Pemasukan lain"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
+        tone: "info",
+      });
+
+      resetIncomeForm();
+      showToast(isEditing ? "Pemasukan lain diperbarui dan tersimpan ke Supabase." : "Pemasukan lain ditambahkan dan tersimpan ke Supabase.", "emerald");
+    } catch (error) {
+      showToast(error.message || "Gagal menyimpan pemasukan lain ke Supabase.", "rose");
     }
-
-    recordActivity?.({
-      type: "pemasukan",
-      title: isEditing ? "Edit pemasukan lain" : "Tambah pemasukan lain",
-      description: `${payload.nama || "Pemasukan lain"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan nominal ${payload.nominal}.`,
-      tone: "info",
-    });
-
-    resetIncomeForm();
-    showToast(isEditing ? "Pemasukan lain diperbarui." : "Pemasukan lain ditambahkan.", "emerald");
   };
 
   const editIncome = (item) => {
