@@ -99,6 +99,56 @@ const sumVendorPaymentAmount = (rows) =>
     0
   );
 
+const SCHEME_NOTE_PREFIX = "Skema iuran:";
+
+const getParticipantSchemeLabelForReport = (participant = {}, defaultTarget = 0) => {
+  const note = String(participant?.catatan || "");
+  const schemeLine =
+    note
+      .split("\n")
+      .find((line) =>
+        line.trim().toLowerCase().startsWith(SCHEME_NOTE_PREFIX.toLowerCase())
+      ) || "";
+
+  const schemeText = schemeLine
+    ? schemeLine.replace(/^\s*Skema iuran:\s*/i, "").trim()
+    : "";
+
+  if (schemeText) return schemeText;
+
+  const target = Number(participant?.targetIuran || 0);
+  const defaultValue = Number(defaultTarget || 0);
+  const halfValue = Math.round(defaultValue / 2);
+
+  if (target <= 0) return "Tidak ikut Rihlah - tidak bayar";
+  if (defaultValue > 0 && target === halfValue) {
+    return "Tidak ikut Rihlah - bayar setengah";
+  }
+  if (defaultValue > 0 && target !== defaultValue) {
+    return "Nominal khusus";
+  }
+
+  return "Ikut Rihlah - bayar full";
+};
+
+const getPaymentProofStatus = (row = {}) =>
+  hasParticipantProof(row) || hasVendorProof(row) ? "Ada bukti" : "Tanpa bukti";
+
+const sortRowsByDateThenName = (rows = []) =>
+  [...rows].sort((a, b) => {
+    const dateCompare = String(a?.tanggal || a?.date || "").localeCompare(
+      String(b?.tanggal || b?.date || "")
+    );
+
+    if (dateCompare !== 0) return dateCompare;
+
+    return String(a?.nama || a?.name || "").localeCompare(
+      String(b?.nama || b?.name || ""),
+      "id",
+      { sensitivity: "base" }
+    );
+  });
+
 const sanitizePdfText = (value) =>
   String(value ?? "-")
     .replace(/\u00a0/g, " ")
@@ -1172,6 +1222,172 @@ export default function LaporanPage({ app }) {
         ? "rose"
         : "amber";
 
+  const lpjParticipantRows = useMemo(() => {
+    const rows = Array.isArray(participantRows) ? participantRows : [];
+
+    return [...rows].sort((a, b) => {
+      const classCompare = String(a?.kelas || "").localeCompare(
+        String(b?.kelas || ""),
+        "id",
+        { numeric: true, sensitivity: "base" }
+      );
+
+      if (classCompare !== 0) return classCompare;
+
+      return String(a?.nama || "").localeCompare(String(b?.nama || ""), "id", {
+        sensitivity: "base",
+      });
+    });
+  }, [participantRows]);
+
+  const lpjParticipantSchemeRows = useMemo(() => {
+    const summaryMap = new Map();
+
+    lpjParticipantRows.forEach((participant) => {
+      const scheme = getParticipantSchemeLabelForReport(
+        participant,
+        config?.iuranDefaultSantri
+      );
+      const current = summaryMap.get(scheme) || {
+        skema: scheme,
+        count: 0,
+        target: 0,
+        paid: 0,
+        remaining: 0,
+      };
+
+      current.count += 1;
+      current.target += Number(participant?.targetIuran || 0);
+      current.paid += Number(participant?.totalPaid || 0);
+      current.remaining += Number(participant?.remaining || 0);
+
+      summaryMap.set(scheme, current);
+    });
+
+    return [...summaryMap.values()].sort((a, b) =>
+      String(a.skema).localeCompare(String(b.skema), "id", {
+        sensitivity: "base",
+      })
+    );
+  }, [config?.iuranDefaultSantri, lpjParticipantRows]);
+
+  const lpjParticipantPaymentRows = useMemo(
+    () =>
+      sortRowsByDateThenName(filteredParticipantPaymentRows).map((payment) => ({
+        id: payment.id,
+        tanggal: payment.tanggal || "-",
+        nama: payment.participantName || "Santri tidak diketahui",
+        detail: payment.participantClass || "Tanpa kelas",
+        metode: payment.metode || "-",
+        nominal: Number(payment.nominal || 0),
+        catatan: payment.catatan || "-",
+        bukti: getPaymentProofStatus(payment),
+      })),
+    [filteredParticipantPaymentRows]
+  );
+
+  const lpjOtherIncomeRows = useMemo(
+    () =>
+      sortRowsByDateThenName(filteredOtherIncomes).map((income) => ({
+        id: income.id,
+        tanggal: income.tanggal || "-",
+        nama: income.nama || "Pemasukan lain",
+        detail: income.sumber || "-",
+        metode: income.metode || "-",
+        nominal: Number(income.nominal || 0),
+        catatan: income.catatan || "-",
+      })),
+    [filteredOtherIncomes]
+  );
+
+  const lpjIncomeRows = useMemo(
+    () =>
+      sortRowsByDateThenName([
+        ...lpjParticipantPaymentRows.map((row) => ({
+          ...row,
+          jenis: "Iuran santri",
+        })),
+        ...lpjOtherIncomeRows.map((row) => ({
+          ...row,
+          jenis: "Pemasukan lain",
+          bukti: "-",
+        })),
+      ]),
+    [lpjOtherIncomeRows, lpjParticipantPaymentRows]
+  );
+
+  const filteredExpenseStatusRows = useMemo(() => {
+    const rows = Array.isArray(expenseRows) ? expenseRows : [];
+
+    return rows.filter((expense) =>
+      isWithinDateRange(expense?.jatuhTempo, filterStartDate, filterEndDate)
+    );
+  }, [expenseRows, filterEndDate, filterStartDate]);
+
+  const lpjVendorBillRows = useMemo(
+    () =>
+      sortRowsByDateThenName(filteredExpenseStatusRows).map((expense) => {
+        const nominal = Number(expense.nominal || 0);
+        const paid = Number(expense.paid || 0);
+        const remaining = Math.max(Number(expense.remaining || 0), 0);
+        const status =
+          expense.status ||
+          (nominal <= 0
+            ? "-"
+            : remaining <= 0
+              ? "Lunas"
+              : paid > 0
+                ? "DP / Cicilan"
+                : "Belum Dibayar");
+
+        return {
+          id: expense.id,
+          tanggal: expense.jatuhTempo || "-",
+          nama: expense.vendor || "-",
+          detail: expense.nama || "-",
+          nominal,
+          paid,
+          remaining,
+          status,
+          catatan: expense.catatan || "-",
+        };
+      }),
+    [filteredExpenseStatusRows]
+  );
+
+  const lpjVendorPaymentRows = useMemo(
+    () =>
+      sortRowsByDateThenName(filteredVendorPaymentRows).map((payment) => {
+        const linkedExpense = expenseLookup?.[String(payment.expenseId)];
+        const vendorName =
+          linkedExpense?.vendor || payment.vendorSnapshot || "Belum ditautkan";
+        const expenseName = linkedExpense?.nama || "Pembayaran manual";
+
+        return {
+          id: payment.id,
+          tanggal: payment.tanggal || "-",
+          nama: vendorName,
+          detail: expenseName,
+          jenis: payment.jenis || "-",
+          metode: payment.metode || "-",
+          nominal: Number(payment.nominal || 0),
+          biayaAdmin: Number(payment.biayaAdmin || 0),
+          total: Number(payment.nominal || 0) + Number(payment.biayaAdmin || 0),
+          catatan: payment.catatan || "-",
+          bukti: getPaymentProofStatus(payment),
+        };
+      }),
+    [expenseLookup, filteredVendorPaymentRows]
+  );
+
+  const lpjTotalPemasukan = reportTotalIuranMasuk + reportTotalOtherIncome;
+  const lpjTotalPengeluaran = reportTotalArusKeluarVendor;
+  const lpjSaldoAkhir = lpjTotalPemasukan - lpjTotalPengeluaran;
+  const lpjTotalKewajibanVendor = reportTotalTagihan;
+  const lpjSisaKewajibanVendor = reportTotalVendorOutstanding;
+  const lpjTotalTransaksiPemasukan = lpjIncomeRows.length;
+  const lpjTotalTransaksiPengeluaran = lpjVendorPaymentRows.length;
+
   const targetIuranLabel = "Target iuran total kegiatan";
   const iuranMasukLabel = hasDateFilter
     ? "Iuran masuk periode"
@@ -1264,6 +1480,202 @@ export default function LaporanPage({ app }) {
 
   const showFinalSection =
     canEdit && (printScope === "final" || (!printScope && laporanView === "final"));
+
+  const showLpjSection =
+    printScope === "lpj" || (!printScope && laporanView === "lpj");
+
+  const downloadLpjPdf = async () => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const generatedAt = formatPrintDate();
+    let y = await addPdfHeader(
+      doc,
+      "LPJ Keuangan Rihlah",
+      generatedAt,
+      periodLabel
+    );
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Ringkasan LPJ", "Nilai"]],
+      body: [
+        ["Nama kegiatan", sanitizePdfText(config?.namaKegiatan || "Rihlah Pesantren Islam Al Yaqut")],
+        ["Periode laporan", sanitizePdfText(periodLabel)],
+        ["Total santri", `${jumlahSantri} santri`],
+        ["Total pemasukan", rupiahForPdf(lpjTotalPemasukan)],
+        ["Iuran santri", rupiahForPdf(reportTotalIuranMasuk)],
+        ["Pemasukan lain", rupiahForPdf(reportTotalOtherIncome)],
+        ["Total pengeluaran aktual", rupiahForPdf(lpjTotalPengeluaran)],
+        ["Total tagihan vendor", rupiahForPdf(lpjTotalKewajibanVendor)],
+        ["Sisa tagihan vendor", rupiahForPdf(lpjSisaKewajibanVendor)],
+        ["Saldo akhir kas", rupiahForPdf(lpjSaldoAkhir)],
+      ],
+      columnStyles: {
+        0: { cellWidth: 95, fontStyle: "bold" },
+        1: { cellWidth: 87, halign: "right" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Rekap Skema Iuran Santri", y);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Skema", "Santri", "Target", "Sudah Bayar", "Sisa"]],
+      body:
+        lpjParticipantSchemeRows.length > 0
+          ? lpjParticipantSchemeRows.map((row) => [
+              sanitizePdfText(row.skema),
+              `${row.count} santri`,
+              rupiahForPdf(row.target),
+              rupiahForPdf(row.paid),
+              rupiahForPdf(row.remaining),
+            ])
+          : [["Belum ada data santri.", "", "", "", ""]],
+      columnStyles: {
+        0: { cellWidth: 62, fontStyle: "bold" },
+        1: { cellWidth: 24, halign: "center" },
+        2: { cellWidth: 32, halign: "right" },
+        3: { cellWidth: 32, halign: "right" },
+        4: { cellWidth: 32, halign: "right", fontStyle: "bold" },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Rincian Pemasukan", y);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Tanggal", "Jenis", "Nama/Sumber", "Metode", "Nominal", "Bukti"]],
+      body:
+        lpjIncomeRows.length > 0
+          ? lpjIncomeRows.map((row) => [
+              sanitizePdfText(row.tanggal),
+              sanitizePdfText(row.jenis),
+              sanitizePdfText(`${row.nama} - ${row.detail}`),
+              sanitizePdfText(row.metode),
+              rupiahForPdf(row.nominal),
+              sanitizePdfText(row.bukti || "-"),
+            ])
+          : [["Belum ada pemasukan pada periode ini.", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.8,
+        cellPadding: 1.4,
+      },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 25, fontStyle: "bold" },
+        2: { cellWidth: 62 },
+        3: { cellWidth: 18 },
+        4: { cellWidth: 30, halign: "right", fontStyle: "bold" },
+        5: { cellWidth: 25 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Tagihan Vendor", y);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Jatuh Tempo", "Vendor", "Keperluan", "Tagihan", "Dibayar", "Sisa", "Status"]],
+      body:
+        lpjVendorBillRows.length > 0
+          ? lpjVendorBillRows.map((row) => [
+              sanitizePdfText(row.tanggal),
+              sanitizePdfText(row.nama),
+              sanitizePdfText(row.detail),
+              rupiahForPdf(row.nominal),
+              rupiahForPdf(row.paid),
+              rupiahForPdf(row.remaining),
+              sanitizePdfText(row.status),
+            ])
+          : [["Belum ada tagihan vendor.", "", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.8,
+        cellPadding: 1.4,
+      },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 32, fontStyle: "bold" },
+        2: { cellWidth: 38 },
+        3: { cellWidth: 25, halign: "right" },
+        4: { cellWidth: 25, halign: "right" },
+        5: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+        6: { cellWidth: 15 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = addPdfSectionTitle(doc, "Rincian Pengeluaran Aktual", y);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Tanggal", "Vendor/Keperluan", "Jenis", "Metode", "Nominal", "Admin", "Total", "Bukti"]],
+      body:
+        lpjVendorPaymentRows.length > 0
+          ? lpjVendorPaymentRows.map((row) => [
+              sanitizePdfText(row.tanggal),
+              sanitizePdfText(`${row.nama} - ${row.detail}`),
+              sanitizePdfText(row.jenis),
+              sanitizePdfText(row.metode),
+              rupiahForPdf(row.nominal),
+              rupiahForPdf(row.biayaAdmin),
+              rupiahForPdf(row.total),
+              sanitizePdfText(row.bukti),
+            ])
+          : [["Belum ada pembayaran vendor pada periode ini.", "", "", "", "", "", "", ""]],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 6.3,
+        cellPadding: 1.2,
+      },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 48, fontStyle: "bold" },
+        2: { cellWidth: 17 },
+        3: { cellWidth: 17 },
+        4: { cellWidth: 24, halign: "right" },
+        5: { cellWidth: 20, halign: "right" },
+        6: { cellWidth: 24, halign: "right", fontStyle: "bold" },
+        7: { cellWidth: 12 },
+      },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    y = ensurePdfSpace(doc, y, 28);
+
+    autoTable(doc, {
+      ...pdfTableTheme,
+      startY: y,
+      margin: { left: 14, right: 14 },
+      head: [["Catatan LPJ"]],
+      body: [
+        [
+          sanitizePdfText(
+            `LPJ ini memisahkan pemasukan aktual dan pengeluaran aktual. Tagihan vendor yang belum lunas tetap ditampilkan sebagai kewajiban agar saldo akhir dan sisa tanggungan terlihat jelas. Total transaksi pemasukan: ${lpjTotalTransaksiPemasukan}. Total transaksi pengeluaran: ${lpjTotalTransaksiPengeluaran}.`
+          ),
+        ],
+      ],
+      styles: {
+        ...pdfTableTheme.styles,
+        fontSize: 8,
+      },
+    });
+
+    addPdfFooter(doc, generatedAt);
+    doc.save(`lpj-keuangan-rihlah-${periodFileSuffix}.pdf`);
+  };
 
   const downloadReportPdf = async () => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1754,7 +2166,9 @@ export default function LaporanPage({ app }) {
                 ? "Lampiran Audit Lengkap"
                 : printScope === "final"
                   ? "Laporan Final Panitia"
-                  : "Laporan Keuangan Kegiatan"}
+                  : printScope === "lpj"
+                    ? "LPJ Keuangan Rihlah"
+                    : "Laporan Keuangan Kegiatan"}
             </h1>
             <p className="mt-1 text-sm text-slate-600">
               Dicetak pada {printDate}
@@ -1841,6 +2255,13 @@ export default function LaporanPage({ app }) {
             Detail Operasional
           </button>
 
+          <button
+            onClick={() => setLaporanView("lpj")}
+            className={tabClass(laporanView === "lpj")}
+          >
+            LPJ Keuangan
+          </button>
+
           {canEdit ? (
             <button
               onClick={() => setLaporanView("final")}
@@ -1871,6 +2292,16 @@ export default function LaporanPage({ app }) {
             Download PDF Laporan
           </button>
 
+          <button onClick={downloadLpjPdf} className={buttonOutline}>
+            <Printer className="mr-2 h-4 w-4" />
+            Cetak LPJ
+          </button>
+
+          <button onClick={downloadLpjPdf} className={buttonPrimary}>
+            <Download className="mr-2 h-4 w-4" />
+            Download PDF LPJ
+          </button>
+
           {canEdit ? (
             <>
               <button onClick={downloadAuditPdf} className={buttonOutline}>
@@ -1896,6 +2327,245 @@ export default function LaporanPage({ app }) {
           ) : null}
         </div>
       </div>
+
+      {showLpjSection ? (
+        <Section
+          id="lpj-keuangan"
+          title="LPJ Keuangan Rihlah"
+          subtitle="Laporan pertanggungjawaban pemasukan, pengeluaran, saldo, dan kewajiban vendor untuk dibagikan kepada asatidz."
+          className="print-section print-audit-section"
+        >
+          <div className="space-y-5">
+            <InlineBanner
+              title="Ringkasan LPJ untuk asatidz"
+              text={`Total pemasukan ${formatRupiah(lpjTotalPemasukan)}, total pengeluaran aktual ${formatRupiah(lpjTotalPengeluaran)}, saldo akhir kas ${formatRupiah(lpjSaldoAkhir)}, dan sisa kewajiban vendor ${formatRupiah(lpjSisaKewajibanVendor)}.`}
+              tone={lpjSaldoAkhir >= 0 ? "emerald" : "rose"}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 print-grid-4">
+              <MiniStat label="Total pemasukan" value={formatRupiah(lpjTotalPemasukan)} helper={`${lpjTotalTransaksiPemasukan} transaksi`} tone="emerald" />
+              <MiniStat label="Iuran santri masuk" value={formatRupiah(reportTotalIuranMasuk)} tone="emerald" />
+              <MiniStat label="Pemasukan lain" value={formatRupiah(reportTotalOtherIncome)} tone="violet" />
+              <MiniStat label="Total pengeluaran aktual" value={formatRupiah(lpjTotalPengeluaran)} helper={`${lpjTotalTransaksiPengeluaran} transaksi`} tone="rose" />
+              <MiniStat label="Total tagihan vendor" value={formatRupiah(lpjTotalKewajibanVendor)} tone="amber" />
+              <MiniStat label="Sisa tagihan vendor" value={formatRupiah(lpjSisaKewajibanVendor)} tone={lpjSisaKewajibanVendor > 0 ? "amber" : "emerald"} />
+              <MiniStat label="Saldo akhir kas" value={formatRupiah(lpjSaldoAkhir)} tone={lpjSaldoAkhir >= 0 ? "emerald" : "rose"} />
+              <MiniStat label="Tunggakan iuran" value={formatRupiah(totalIuranOutstanding)} tone={totalIuranOutstanding > 0 ? "rose" : "emerald"} />
+            </div>
+
+            <div className="no-print flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <button onClick={downloadLpjPdf} className={buttonOutline}>
+                <Printer className="mr-2 h-4 w-4" />
+                Cetak LPJ
+              </button>
+              <button onClick={downloadLpjPdf} className={buttonPrimary}>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF LPJ
+              </button>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
+                  <Users className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Rekap Skema Iuran Santri</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Memperjelas santri yang ikut, tidak ikut, bayar setengah, tidak bayar, atau nominal khusus.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {lpjParticipantSchemeRows.length === 0 ? (
+                  <div className="print-table-empty">Belum ada data skema iuran santri.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[760px] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th>Skema</th>
+                        <th>Santri</th>
+                        <th>Target</th>
+                        <th>Sudah bayar</th>
+                        <th>Sisa</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lpjParticipantSchemeRows.map((row) => (
+                        <tr key={row.skema} className="border-b border-slate-100">
+                          <td className="cell-name p-3 font-bold text-slate-900">{row.skema}</td>
+                          <td className="cell-class p-3">{row.count} santri</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.target)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.paid)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.remaining)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Rincian Pemasukan</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Gabungan seluruh iuran santri dan pemasukan lain pada periode laporan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {lpjIncomeRows.length === 0 ? (
+                  <div className="print-table-empty">Belum ada pemasukan pada periode ini.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th>Tanggal</th>
+                        <th>Jenis</th>
+                        <th>Nama / Sumber</th>
+                        <th>Metode</th>
+                        <th>Nominal</th>
+                        <th>Bukti</th>
+                        <th>Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lpjIncomeRows.map((row) => (
+                        <tr key={`${row.jenis}-${row.id}`} className="border-b border-slate-100">
+                          <td className="cell-date p-3">{row.tanggal}</td>
+                          <td className="cell-type p-3 font-bold text-slate-900">{row.jenis}</td>
+                          <td className="cell-name p-3">
+                            <p className="font-bold text-slate-900">{row.nama}</p>
+                            <p className="text-xs text-slate-500">{row.detail}</p>
+                          </td>
+                          <td className="cell-method p-3">{row.metode}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.nominal)}</td>
+                          <td className="cell-note p-3">{row.bukti || "-"}</td>
+                          <td className="cell-note p-3">{row.catatan}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Tagihan Vendor dan Kewajiban</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Daftar seluruh tagihan vendor agar sisa kewajiban tetap terlihat jelas.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {lpjVendorBillRows.length === 0 ? (
+                  <div className="print-table-empty">Belum ada tagihan vendor.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[900px] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th>Jatuh tempo</th>
+                        <th>Vendor</th>
+                        <th>Keperluan</th>
+                        <th>Tagihan</th>
+                        <th>Dibayar</th>
+                        <th>Sisa</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lpjVendorBillRows.map((row) => (
+                        <tr key={row.id} className="border-b border-slate-100">
+                          <td className="cell-date p-3">{row.tanggal}</td>
+                          <td className="cell-name p-3 font-bold text-slate-900">{row.nama}</td>
+                          <td className="cell-note p-3">{row.detail}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.nominal)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.paid)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.remaining)}</td>
+                          <td className="p-3"><Pill tone={getFinalVendorTone(row.status)}>{row.status}</Pill></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm print-card">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-rose-50 p-3 text-rose-700">
+                  <Wallet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Rincian Pengeluaran Aktual</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Seluruh pembayaran vendor yang benar-benar keluar dari kas, termasuk biaya admin.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-x-auto print-table-wrap">
+                {lpjVendorPaymentRows.length === 0 ? (
+                  <div className="print-table-empty">Belum ada pembayaran vendor pada periode ini.</div>
+                ) : (
+                  <table className="print-table w-full min-w-[980px] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th>Tanggal</th>
+                        <th>Vendor / Keperluan</th>
+                        <th>Jenis</th>
+                        <th>Metode</th>
+                        <th>Nominal</th>
+                        <th>Admin</th>
+                        <th>Total</th>
+                        <th>Bukti</th>
+                        <th>Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lpjVendorPaymentRows.map((row) => (
+                        <tr key={row.id} className="border-b border-slate-100">
+                          <td className="cell-date p-3">{row.tanggal}</td>
+                          <td className="cell-name p-3">
+                            <p className="font-bold text-slate-900">{row.nama}</p>
+                            <p className="text-xs text-slate-500">{row.detail}</p>
+                          </td>
+                          <td className="cell-type p-3">{row.jenis}</td>
+                          <td className="cell-method p-3">{row.metode}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.nominal)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.biayaAdmin)}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.total)}</td>
+                          <td className="cell-note p-3">{row.bukti}</td>
+                          <td className="cell-note p-3">{row.catatan}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <InlineBanner
+              title="Catatan saldo"
+              text="Saldo akhir LPJ dihitung dari pemasukan aktual dikurangi pengeluaran aktual. Sisa tagihan vendor tetap ditampilkan sebagai kewajiban yang perlu diselesaikan atau dijelaskan dalam rapat."
+              tone="sky"
+            />
+          </div>
+        </Section>
+      ) : null}
 
       {showReportSection ? (
         <Section
