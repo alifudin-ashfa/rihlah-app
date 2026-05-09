@@ -5,7 +5,7 @@ import {
   createId,
   normalizeParticipant,
 } from "../../shared/lib/rihlahCore";
-import { deleteParticipantFromSupabase, upsertParticipantToSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteParticipantFromSupabase } from "../../shared/lib/supabasePersistence";
 import { useParticipantPayments } from "./useParticipantPayments";
 
 export function useParticipantsDomain({ initialParticipants, defaultTarget, showToast, recordActivity }) {
@@ -31,7 +31,7 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
         const totalPaid = paymentsSorted.reduce((sum, payment) => sum + clampMin(payment.nominal), 0);
         const remaining = Math.max(item.targetIuran - totalPaid, 0);
         const overpaid = Math.max(totalPaid - item.targetIuran, 0);
-        const status = totalPaid <= 0 ? "Belum Bayar" : remaining <= 0 ? "Lunas" : "Cicilan";
+        const status = item.targetIuran <= 0 ? "Lunas" : totalPaid <= 0 ? "Belum Bayar" : remaining <= 0 ? "Lunas" : "Cicilan";
         return {
           ...item,
           payments: paymentsSorted,
@@ -78,7 +78,7 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
     setEditingParticipantId(null);
   };
 
-  const addOrUpdateParticipant = async () => {
+  const addOrUpdateParticipant = () => {
     const targetValue = participantForm.targetIuran === "" ? clampMin(defaultTarget) : clampMin(participantForm.targetIuran);
 
     if (!participantForm.nama.trim()) {
@@ -86,8 +86,8 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
       return;
     }
 
-    if (targetValue <= 0) {
-      showToast("Target iuran harus lebih dari 0. Periksa nominal default atau nominal khusus santri.", "rose");
+    if (targetValue < 0) {
+      showToast("Target iuran tidak boleh kurang dari 0.", "rose");
       return;
     }
 
@@ -106,27 +106,21 @@ export function useParticipantsDomain({ initialParticipants, defaultTarget, show
 
     const isEditing = Boolean(editingParticipantId);
 
-    try {
-      await upsertParticipantToSupabase(payload, defaultTarget);
-
-      if (isEditing) {
-        setParticipants((prev) => prev.map((item) => (item.id === editingParticipantId ? payload : item)));
-      } else {
-        setParticipants((prev) => [payload, ...prev]);
-      }
-
-      recordActivity?.({
-        type: "santri",
-        title: isEditing ? "Edit data santri" : "Tambah santri",
-        description: `${payload.nama || "Santri"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan target iuran ${payload.targetIuran}.`,
-        tone: "info",
-      });
-
-      resetParticipantForm();
-      showToast(isEditing ? "Data santri diperbarui dan tersimpan ke Supabase." : "Santri baru ditambahkan dan tersimpan ke Supabase.", "emerald");
-    } catch (error) {
-      showToast(error.message || "Gagal menyimpan data santri ke Supabase.", "rose");
+    if (isEditing) {
+      setParticipants((prev) => prev.map((item) => (item.id === editingParticipantId ? payload : item)));
+    } else {
+      setParticipants((prev) => [payload, ...prev]);
     }
+
+    recordActivity?.({
+      type: "santri",
+      title: isEditing ? "Edit data santri" : "Tambah santri",
+      description: `${payload.nama || "Santri"} ${isEditing ? "diperbarui" : "ditambahkan"} dengan target iuran ${payload.targetIuran}.`,
+      tone: "info",
+    });
+
+    resetParticipantForm();
+    showToast(isEditing ? "Data santri diperbarui." : "Santri baru ditambahkan.", "emerald");
   };
 
   const editParticipant = (item) => {

@@ -7,7 +7,7 @@ import {
   getToday,
   normalizeParticipantPayment,
 } from "../../shared/lib/rihlahCore";
-import { deleteParticipantPaymentFromSupabase, upsertParticipantPaymentToSupabase } from "../../shared/lib/supabasePersistence";
+import { deleteParticipantPaymentFromSupabase, replaceParticipantPaymentsInSupabase, upsertParticipantPaymentToSupabase } from "../../shared/lib/supabasePersistence";
 
 export function useParticipantPayments({
   participants,
@@ -147,23 +147,31 @@ export function useParticipantPayments({
   const removeParticipantPayment = async (participantId, paymentId) => {
     const confirmed = confirmDestructiveAction({
       title: "Hapus pembayaran iuran",
-      message: "Transaksi pembayaran iuran ini akan dihapus dari histori santri.",
+      message: "Transaksi pembayaran iuran ini akan dihapus dari histori santri dan Supabase.",
+      confirmationText: "HAPUS",
     });
 
     if (!confirmed) return;
 
-    try {
-      await deleteParticipantPaymentFromSupabase(paymentId);
+    const safeParticipantId = String(participantId);
+    const safePaymentId = String(paymentId);
+    const selectedParticipant = participantLookup[safeParticipantId];
 
-      const selectedParticipant = participantLookup[String(participantId)];
+    const remainingPayments = (selectedParticipant?.payments || []).filter(
+      (payment) => String(payment.id) !== safePaymentId
+    );
+
+    try {
+      await deleteParticipantPaymentFromSupabase(safePaymentId);
+      await replaceParticipantPaymentsInSupabase(safeParticipantId, remainingPayments);
 
       setParticipants((prev) =>
         prev.map((item) =>
-          item.id === participantId
+          String(item.id) === safeParticipantId
             ? {
                 ...item,
                 payments: (item.payments || []).filter(
-                  (payment) => payment.id !== paymentId
+                  (payment) => String(payment.id) !== safePaymentId
                 ),
               }
             : item
@@ -177,9 +185,9 @@ export function useParticipantPayments({
         tone: "danger",
       });
 
-      showToast("Pembayaran iuran berhasil dihapus dari Supabase.", "emerald");
+      showToast("Pembayaran iuran berhasil dihapus permanen dari Supabase.", "emerald");
     } catch (error) {
-      showToast(error.message || "Gagal menghapus pembayaran iuran.", "rose");
+      showToast(error.message || "Gagal menghapus pembayaran iuran dari Supabase.", "rose");
     }
   };
 

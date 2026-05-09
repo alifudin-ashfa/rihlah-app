@@ -88,6 +88,123 @@ function sortParticipantsByClassThenName(rows = []) {
   });
 }
 
+const SCHEME_NOTE_PREFIX = "Skema iuran:";
+
+const PARTICIPANT_BILLING_SCHEMES = [
+  {
+    value: "ikut-full",
+    label: "Ikut Rihlah - Bayar full",
+    shortLabel: "Ikut • Full",
+    note: "Ikut Rihlah - bayar full",
+    tone: "emerald",
+  },
+  {
+    value: "tidak-ikut-full",
+    label: "Tidak ikut Rihlah - Tetap bayar full",
+    shortLabel: "Tidak ikut • Full",
+    note: "Tidak ikut Rihlah - tetap bayar full",
+    tone: "amber",
+  },
+  {
+    value: "tidak-ikut-setengah",
+    label: "Tidak ikut Rihlah - Bayar setengah",
+    shortLabel: "Tidak ikut • 50%",
+    note: "Tidak ikut Rihlah - bayar setengah",
+    tone: "amber",
+  },
+  {
+    value: "tidak-ikut-bebas",
+    label: "Tidak ikut Rihlah - Tidak bayar",
+    shortLabel: "Tidak ikut • Bebas iuran",
+    note: "Tidak ikut Rihlah - bebas iuran",
+    tone: "rose",
+  },
+  {
+    value: "khusus",
+    label: "Nominal khusus",
+    shortLabel: "Nominal khusus",
+    note: "Nominal khusus sesuai keputusan panitia",
+    tone: "sky",
+  },
+];
+
+const getDefaultIuran = (defaultValue) => Number(defaultValue || 0);
+
+const getHalfIuran = (defaultValue) => Math.round(getDefaultIuran(defaultValue) / 2);
+
+const getSchemeTarget = (schemeValue, defaultValue, currentValue = "") => {
+  const defaultIuran = getDefaultIuran(defaultValue);
+
+  if (schemeValue === "tidak-ikut-setengah") return getHalfIuran(defaultValue);
+  if (schemeValue === "tidak-ikut-bebas") return 0;
+  if (schemeValue === "khusus") return currentValue;
+  return defaultIuran;
+};
+
+const normalizeSchemeNote = (note = "") =>
+  String(note || "").replace(/^\s*Skema iuran:\s*/i, "").trim();
+
+const getSchemeNoteLine = (note = "") => {
+  const lines = String(note || "").split("\n");
+  const found = lines.find((line) =>
+    line.trim().toLowerCase().startsWith(SCHEME_NOTE_PREFIX.toLowerCase())
+  );
+
+  return normalizeSchemeNote(found || "");
+};
+
+const removeSchemeNoteLine = (note = "") =>
+  String(note || "")
+    .split("\n")
+    .filter(
+      (line) =>
+        !line.trim().toLowerCase().startsWith(SCHEME_NOTE_PREFIX.toLowerCase())
+    )
+    .join("\n")
+    .trim();
+
+const mergeSchemeNote = (note = "", schemeNote = "") => {
+  const cleanNote = removeSchemeNoteLine(note);
+  const nextSchemeNote = schemeNote ? `${SCHEME_NOTE_PREFIX} ${schemeNote}` : "";
+
+  return [nextSchemeNote, cleanNote].filter(Boolean).join("\n");
+};
+
+const getSchemeByNote = (note = "") => {
+  const normalized = normalizeSchemeNote(note).toLowerCase();
+
+  if (!normalized) return null;
+
+  return (
+    PARTICIPANT_BILLING_SCHEMES.find((scheme) =>
+      normalized.includes(scheme.note.toLowerCase())
+    ) || null
+  );
+};
+
+const getParticipantBillingScheme = (participant = {}, defaultValue = 0) => {
+  const target = Number(participant.targetIuran || 0);
+  const defaultIuran = getDefaultIuran(defaultValue);
+  const halfIuran = getHalfIuran(defaultValue);
+  const schemeFromNote = getSchemeByNote(getSchemeNoteLine(participant.catatan));
+
+  if (schemeFromNote) return schemeFromNote;
+
+  if (target <= 0) {
+    return PARTICIPANT_BILLING_SCHEMES.find((item) => item.value === "tidak-ikut-bebas");
+  }
+
+  if (defaultIuran > 0 && target === halfIuran) {
+    return PARTICIPANT_BILLING_SCHEMES.find((item) => item.value === "tidak-ikut-setengah");
+  }
+
+  if (defaultIuran > 0 && target !== defaultIuran) {
+    return PARTICIPANT_BILLING_SCHEMES.find((item) => item.value === "khusus");
+  }
+
+  return PARTICIPANT_BILLING_SCHEMES.find((item) => item.value === "ikut-full");
+};
+
 export default function SantriPage({ app }) {
   const {
     config,
@@ -216,6 +333,35 @@ export default function SantriPage({ app }) {
     () => sortParticipantsByClassThenName(Array.isArray(participantRows) ? participantRows : []),
     [participantRows]
   );
+
+  const participantBillingScheme = getParticipantBillingScheme(
+    {
+      targetIuran:
+        participantForm.targetIuran === ""
+          ? config.iuranDefaultSantri
+          : participantForm.targetIuran,
+      catatan: participantForm.catatan,
+    },
+    config.iuranDefaultSantri
+  );
+
+  const handleParticipantBillingSchemeChange = (schemeValue) => {
+    const selectedScheme =
+      PARTICIPANT_BILLING_SCHEMES.find((scheme) => scheme.value === schemeValue) ||
+      PARTICIPANT_BILLING_SCHEMES[0];
+
+    setParticipantForm((prev) => ({
+      ...prev,
+      targetIuran: String(
+        getSchemeTarget(
+          selectedScheme.value,
+          config.iuranDefaultSantri,
+          prev.targetIuran
+        )
+      ),
+      catatan: mergeSchemeNote(prev.catatan, selectedScheme.note),
+    }));
+  };
 
   const paymentProofSummary = useMemo(() => {
     const rows = Array.isArray(participantPaymentHistory)
@@ -505,6 +651,12 @@ export default function SantriPage({ app }) {
             </div>
           </div>
 
+          <InlineBanner
+            title="Skema iuran santri fleksibel"
+            text="Santri yang tidak ikut Rihlah bisa tetap dicatat dengan target iuran full, setengah, bebas iuran, atau nominal khusus. Perhitungan lunas dan tunggakan mengikuti target iuran masing-masing santri."
+            tone="sky"
+          />
+
           {canManageData ? (
             <div className="grid gap-4 2xl:grid-cols-2 2xl:gap-6">
               <div className="space-y-4 rounded-2xl border bg-slate-50 p-4">
@@ -585,6 +737,29 @@ export default function SantriPage({ app }) {
                   <div className="grid gap-3">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-700">
+                        Skema keikutsertaan dan iuran
+                      </label>
+                      <select
+                        className={selectClass}
+                        value={participantBillingScheme?.value || "ikut-full"}
+                        onChange={(event) =>
+                          handleParticipantBillingSchemeChange(event.target.value)
+                        }
+                      >
+                        {PARTICIPANT_BILLING_SCHEMES.map((scheme) => (
+                          <option key={scheme.value} value={scheme.value}>
+                            {scheme.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500">
+                        Untuk santri yang tidak ikut Rihlah, pilih apakah tetap
+                        bayar full, setengah, bebas iuran, atau nominal khusus.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">
                         Target iuran
                       </label>
                       <input
@@ -608,8 +783,8 @@ export default function SantriPage({ app }) {
                       id="target-iuran-help"
                       className="-mt-2 text-xs text-slate-500"
                     >
-                      Kosongkan untuk memakai nominal default. Masukkan angka tanpa titik,
-                      contoh: 500000.
+                      Nominal ini menjadi dasar status lunas/tunggakan. Untuk skema setengah
+                      atau bebas iuran, sistem otomatis mengubah target sesuai pilihan di atas.
                     </p>
 
                     <div className="space-y-2">
@@ -858,6 +1033,10 @@ export default function SantriPage({ app }) {
             ) : (
               filteredParticipants.map((item) => {
                 const isExpanded = Boolean(expandedParticipants[item.id]);
+                const billingInfo = getParticipantBillingScheme(
+                  item,
+                  config.iuranDefaultSantri
+                );
 
                 return (
                   <div key={item.id} className="rounded-2xl border bg-white p-4">
@@ -868,6 +1047,9 @@ export default function SantriPage({ app }) {
                           <Pill>{item.kelas || "Tanpa kelas"}</Pill>
                           <Pill>{item.kamar || "Tanpa kamar"}</Pill>
                           <Pill tone={getParticipantTone(item.status)}>{item.status}</Pill>
+                          {billingInfo ? (
+                            <Pill tone={billingInfo.tone}>{billingInfo.shortLabel}</Pill>
+                          ) : null}
                           {item.overpaid > 0 ? (
                             <Pill tone="amber">
                               Lebih bayar {formatRupiah(item.overpaid)}

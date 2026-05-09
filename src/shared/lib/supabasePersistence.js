@@ -246,6 +246,25 @@ export const upsertParticipantPaymentToSupabase = async (payment, participantId)
   throwIfError("Gagal menyimpan pembayaran iuran", error);
 };
 
+export const replaceParticipantPaymentsInSupabase = async (participantId, payments = []) => {
+  if (!isSupabaseConfigured || !supabase || !participantId) return;
+
+  const safeParticipantId = asStringId(participantId);
+
+  const { error: deleteError } = await supabase
+    .from("participant_payments")
+    .delete()
+    .eq("participant_id", safeParticipantId);
+
+  throwIfError("Gagal menghapus histori pembayaran iuran lama", deleteError);
+
+  const rows = (Array.isArray(payments) ? payments : []).map((payment) =>
+    mapParticipantPaymentToDb(payment, safeParticipantId)
+  );
+
+  await upsertMany("participant_payments", rows);
+};
+
 export const deleteExpenseFromSupabase = async (id) => {
   if (!isSupabaseConfigured || !supabase || !id) return;
 
@@ -395,3 +414,4 @@ export async function saveStateToSupabase(state) {
   await upsertMany("vendor_payments", vendorPaymentRows);
   await upsertMany("other_incomes", otherIncomeRows);
 }
+
