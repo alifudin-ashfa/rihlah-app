@@ -134,6 +134,43 @@ const getParticipantSchemeLabelForReport = (participant = {}, defaultTarget = 0)
 const getPaymentProofStatus = (row = {}) =>
   hasParticipantProof(row) || hasVendorProof(row) ? "Ada bukti" : "Tanpa bukti";
 
+const isLoanOrAdvancePayment = (row = {}) => {
+  const text = [
+    row?.catatan,
+    row?.nama,
+    row?.detail,
+    row?.vendorSnapshot,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /talangan|pinjam|pinjaman|hutang|utang/.test(text);
+};
+
+const inferLoanProvider = (row = {}) => {
+  const text = String(row?.catatan || "");
+
+  if (/setyawan/i.test(text)) return "Ustadz Setyawan";
+
+  const ustadzMatch = text.match(/ustadz\s+([a-zA-ZÀ-ÿ'\s]{2,40})/i);
+  if (ustadzMatch?.[1]) {
+    return `Ustadz ${ustadzMatch[1].trim().replace(/[.,;:]+$/g, "")}`;
+  }
+
+  return "Pemberi talangan";
+};
+
+const getLoanStatus = (row = {}) => {
+  const text = String(row?.catatan || "").toLowerCase();
+
+  if (/sudah\s+(dikembalikan|dibayar)|talangan\s+lunas|pinjaman\s+lunas/.test(text)) {
+    return "Sudah dikembalikan";
+  }
+
+  return "Belum dikembalikan";
+};
+
 const sortRowsByDateThenName = (rows = []) =>
   [...rows].sort((a, b) => {
     const dateCompare = String(a?.tanggal || a?.date || "").localeCompare(
@@ -1380,6 +1417,30 @@ export default function LaporanPage({ app }) {
     [expenseLookup, filteredVendorPaymentRows]
   );
 
+  const lpjLoanRows = useMemo(
+    () =>
+      lpjVendorPaymentRows
+        .filter(isLoanOrAdvancePayment)
+        .map((payment) => ({
+          id: payment.id,
+          tanggal: payment.tanggal,
+          pemberi: inferLoanProvider(payment),
+          keperluan: `${payment.nama} - ${payment.detail}`,
+          nominal: Number(payment.total || payment.nominal || 0),
+          status: getLoanStatus(payment),
+          catatan: payment.catatan || "-",
+        })),
+    [lpjVendorPaymentRows]
+  );
+
+  const lpjTotalDanaTalangan = lpjLoanRows.reduce(
+    (sum, item) => sum + Number(item.nominal || 0),
+    0
+  );
+  const lpjKewajibanPengembalianTalangan = lpjLoanRows
+    .filter((item) => item.status !== "Sudah dikembalikan")
+    .reduce((sum, item) => sum + Number(item.nominal || 0), 0);
+
   const lpjTotalPemasukan = reportTotalIuranMasuk + reportTotalOtherIncome;
   const lpjTotalPengeluaran = reportTotalArusKeluarVendor;
   const lpjSaldoAkhir = lpjTotalPemasukan - lpjTotalPengeluaran;
@@ -1509,6 +1570,11 @@ export default function LaporanPage({ app }) {
         ["Total pengeluaran aktual", rupiahForPdf(lpjTotalPengeluaran)],
         ["Total tagihan vendor", rupiahForPdf(lpjTotalKewajibanVendor)],
         ["Sisa tagihan vendor", rupiahForPdf(lpjSisaKewajibanVendor)],
+        ["Dana talangan/pinjaman", rupiahForPdf(lpjTotalDanaTalangan)],
+        [
+          "Kewajiban pengembalian talangan",
+          rupiahForPdf(lpjKewajibanPengembalianTalangan),
+        ],
         ["Saldo akhir kas", rupiahForPdf(lpjSaldoAkhir)],
       ],
       columnStyles: {
@@ -1653,6 +1719,41 @@ export default function LaporanPage({ app }) {
     });
 
     y = doc.lastAutoTable.finalY + 8;
+
+    if (lpjLoanRows.length > 0) {
+      y = addPdfSectionTitle(doc, "Dana Talangan / Pinjaman", y);
+
+      autoTable(doc, {
+        ...pdfTableTheme,
+        startY: y,
+        margin: { left: 14, right: 14 },
+        head: [["Tanggal", "Pemberi", "Keperluan", "Nominal", "Status", "Catatan"]],
+        body: lpjLoanRows.map((row) => [
+          sanitizePdfText(row.tanggal),
+          sanitizePdfText(row.pemberi),
+          sanitizePdfText(row.keperluan),
+          rupiahForPdf(row.nominal),
+          sanitizePdfText(row.status),
+          sanitizePdfText(row.catatan),
+        ]),
+        styles: {
+          ...pdfTableTheme.styles,
+          fontSize: 6.8,
+          cellPadding: 1.4,
+        },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 28, fontStyle: "bold" },
+          2: { cellWidth: 42 },
+          3: { cellWidth: 25, halign: "right", fontStyle: "bold" },
+          4: { cellWidth: 28, fontStyle: "bold" },
+          5: { cellWidth: 39 },
+        },
+      });
+
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
     y = ensurePdfSpace(doc, y, 28);
 
     autoTable(doc, {
@@ -1663,7 +1764,7 @@ export default function LaporanPage({ app }) {
       body: [
         [
           sanitizePdfText(
-            `LPJ ini memisahkan pemasukan aktual dan pengeluaran aktual. Tagihan vendor yang belum lunas tetap ditampilkan sebagai kewajiban agar saldo akhir dan sisa tanggungan terlihat jelas. Total transaksi pemasukan: ${lpjTotalTransaksiPemasukan}. Total transaksi pengeluaran: ${lpjTotalTransaksiPengeluaran}.`
+            `LPJ ini memisahkan pemasukan aktual dan pengeluaran aktual. Tagihan vendor yang belum lunas tetap ditampilkan sebagai kewajiban agar saldo akhir dan sisa tanggungan terlihat jelas. Total transaksi pemasukan: ${lpjTotalTransaksiPemasukan}. Total transaksi pengeluaran: ${lpjTotalTransaksiPengeluaran}. Dana talangan/pinjaman yang perlu dijelaskan: ${formatRupiah(lpjKewajibanPengembalianTalangan)}.`
           ),
         ],
       ],
@@ -2349,6 +2450,8 @@ export default function LaporanPage({ app }) {
               <MiniStat label="Total pengeluaran aktual" value={formatRupiah(lpjTotalPengeluaran)} helper={`${lpjTotalTransaksiPengeluaran} transaksi`} tone="rose" />
               <MiniStat label="Total tagihan vendor" value={formatRupiah(lpjTotalKewajibanVendor)} tone="amber" />
               <MiniStat label="Sisa tagihan vendor" value={formatRupiah(lpjSisaKewajibanVendor)} tone={lpjSisaKewajibanVendor > 0 ? "amber" : "emerald"} />
+              <MiniStat label="Dana talangan / pinjaman" value={formatRupiah(lpjTotalDanaTalangan)} helper={`${lpjLoanRows.length} transaksi`} tone={lpjTotalDanaTalangan > 0 ? "amber" : "slate"} />
+              <MiniStat label="Kewajiban pengembalian" value={formatRupiah(lpjKewajibanPengembalianTalangan)} tone={lpjKewajibanPengembalianTalangan > 0 ? "rose" : "emerald"} />
               <MiniStat label="Saldo akhir kas" value={formatRupiah(lpjSaldoAkhir)} tone={lpjSaldoAkhir >= 0 ? "emerald" : "rose"} />
               <MiniStat label="Tunggakan iuran" value={formatRupiah(totalIuranOutstanding)} tone={totalIuranOutstanding > 0 ? "rose" : "emerald"} />
             </div>
@@ -2558,10 +2661,57 @@ export default function LaporanPage({ app }) {
               </div>
             </div>
 
+            {lpjLoanRows.length > 0 ? (
+              <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm print-card">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl bg-white p-3 text-amber-700">
+                    <Wallet className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">Dana Talangan / Pinjaman</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Transaksi ini dicatat dari catatan pembayaran vendor yang memuat kata talangan/pinjaman, sehingga kewajiban pengembalian terlihat jelas dalam LPJ.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 overflow-x-auto print-table-wrap">
+                  <table className="print-table w-full min-w-[920px] border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th>Tanggal</th>
+                        <th>Pemberi</th>
+                        <th>Keperluan</th>
+                        <th>Nominal</th>
+                        <th>Status</th>
+                        <th>Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lpjLoanRows.map((row) => (
+                        <tr key={row.id} className="border-b border-amber-100">
+                          <td className="cell-date p-3">{row.tanggal}</td>
+                          <td className="cell-name p-3 font-bold text-slate-900">{row.pemberi}</td>
+                          <td className="cell-note p-3">{row.keperluan}</td>
+                          <td className="cell-amount p-3 text-right font-bold">{formatRupiah(row.nominal)}</td>
+                          <td className="p-3">
+                            <Pill tone={row.status === "Sudah dikembalikan" ? "emerald" : "amber"}>
+                              {row.status}
+                            </Pill>
+                          </td>
+                          <td className="cell-note p-3">{row.catatan}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+
             <InlineBanner
               title="Catatan saldo"
-              text="Saldo akhir LPJ dihitung dari pemasukan aktual dikurangi pengeluaran aktual. Sisa tagihan vendor tetap ditampilkan sebagai kewajiban yang perlu diselesaikan atau dijelaskan dalam rapat."
-              tone="sky"
+              text={`Saldo akhir LPJ dihitung dari pemasukan aktual dikurangi pengeluaran aktual. Sisa tagihan vendor tetap ditampilkan sebagai kewajiban yang perlu diselesaikan atau dijelaskan dalam rapat. Kewajiban pengembalian dana talangan/pinjaman: ${formatRupiah(lpjKewajibanPengembalianTalangan)}.`}
+              tone={lpjKewajibanPengembalianTalangan > 0 ? "amber" : "sky"}
             />
           </div>
         </Section>
